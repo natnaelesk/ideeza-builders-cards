@@ -62,6 +62,8 @@ export default function App() {
 
   const cardRef = useRef<HTMLDivElement>(null)
   const previewWrapRef = useRef<HTMLDivElement>(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const badgeInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     waitForFonts().then(() => setFontsReady(true))
@@ -88,6 +90,7 @@ export default function App() {
     setName(SAMPLE[next].name)
     setSub(SAMPLE[next].sub)
     setBadgeUrl(null)
+    if (badgeInputRef.current) badgeInputRef.current.value = ''
   }
 
   const onPhotoChange = async (file: File | null) => {
@@ -243,6 +246,7 @@ export default function App() {
           <label className="field">
             <span>Your photo</span>
             <input
+              ref={photoInputRef}
               type="file"
               accept="image/*"
               onChange={(e) => {
@@ -315,6 +319,7 @@ export default function App() {
           <label className="field">
             <span>{roleCfg.badgeUploadLabel}</span>
             <input
+              ref={badgeInputRef}
               type="file"
               accept="image/*"
               onChange={(e) => {
