@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Builders' Lab 2.0 — Social Card</title>
+<!--
+  IDEEZA x Women Techmakers Ethiopia x FCA Creators Hub — Builders' Lab 2.0 social card template.
+  Render a variant with:  card.html?role=builder | mentor | judge
+  Optional URL params (for the future upload site): name, sub, photo (url), badge (url)
+  e.g. card.html?role=builder&name=Hana%20T.&sub=SoilSense%20—%20...
+  The QR (assets/qr_waitlist.png) points to https://www.ideeza.com/waitlist — same for every card.
+-->
+<style>
+  @font-face { font-family: "PoppinsL"; src: local("Poppins"); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1350px; overflow: hidden; }
+  body { font-family: "Poppins", "Inter", sans-serif; color: #1c0f45; }
+
+  .card {
+    position: relative; width: 1080px; height: 1350px; overflow: hidden;
+    background:
+      radial-gradient(900px 700px at 85% 8%, #e6dcff 0%, rgba(230,220,255,0) 60%),
+      radial-gradient(800px 600px at 0% 55%, #efe8ff 0%, rgba(239,232,255,0) 60%),
+      radial-gradient(1000px 500px at 50% 105%, #dccdfd 0%, rgba(220,205,253,0) 70%),
+      linear-gradient(180deg, #fbfaff 0%, #f3eeff 55%, #ebe2ff 100%);
+  }
+
+  /* ---------- decorative glass 3D shapes ---------- */
+  .sphere { position: absolute; border-radius: 50%;
+    background: radial-gradient(circle at 32% 28%, #ffffff 0%, #e4d6ff 18%, #a77cff 55%, #6a2fe0 85%, #4b18b8 100%);
+    box-shadow: inset -18px -22px 40px rgba(60,10,150,.45), inset 14px 16px 30px rgba(255,255,255,.55), 0 30px 60px rgba(110,60,220,.25);
+    opacity: .9; }
+  .sphere.glass { background: radial-gradient(circle at 30% 26%, rgba(255,255,255,.95) 0%, rgba(220,200,255,.55) 22%, rgba(150,100,255,.35) 60%, rgba(110,60,230,.55) 100%);
+    box-shadow: inset -10px -14px 30px rgba(90,40,200,.35), inset 10px 10px 24px rgba(255,255,255,.7), 0 20px 50px rgba(120,70,230,.18);
+    backdrop-filter: blur(4px); }
+  .s1 { width: 150px; height: 150px; left: -48px; top: 590px; }
+  .s2 { width: 64px;  height: 64px;  left: 660px; top: 418px; }
+  .s3 { width: 210px; height: 210px; right: -90px; top: 1010px; }
+  .s4 { width: 40px;  height: 40px;  left: 44px;  top: 1085px; }
+
+  .cube { position: absolute; right: 72px; top: 230px; width: 96px; height: 96px; transform-style: preserve-3d;
+    transform: perspective(600px) rotateX(-24deg) rotateY(38deg) rotateZ(8deg); }
+  .cube div { position: absolute; width: 96px; height: 96px; border-radius: 14px;
+    background: linear-gradient(135deg, rgba(255,255,255,.75), rgba(170,120,255,.55) 45%, rgba(110,50,230,.75));
+    border: 1.5px solid rgba(255,255,255,.8); box-shadow: inset 0 0 18px rgba(255,255,255,.5); }
+  .cube .f1 { transform: translateZ(48px); }
+  .cube .f2 { transform: rotateY(90deg) translateZ(48px); background: linear-gradient(135deg, rgba(200,170,255,.7), rgba(100,40,220,.85)); }
+  .cube .f3 { transform: rotateX(90deg) translateZ(48px); background: linear-gradient(135deg, rgba(255,255,255,.95), rgba(200,170,255,.7)); }
+
+  .ribbon { position: absolute; left: -60px; top: 560px; width: 820px; height: 560px; pointer-events: none; }
+
+  /* ---------- header ---------- */
+  .top { position: absolute; left: 64px; right: 64px; top: 52px; height: 84px; display: flex; align-items: center; justify-content: space-between; }
+  .top .brand { height: 72px; }
+  .role { display: inline-flex; align-items: center; gap: 12px; padding: 14px 26px 14px 18px; border-radius: 999px;
+    background: linear-gradient(135deg, #2a1170, #6a2ff0); color: #fff; font-weight: 700; font-size: 24px; letter-spacing: 3px;
+    box-shadow: 0 12px 30px rgba(90,40,220,.35), inset 0 1px 0 rgba(255,255,255,.35); }
+  .role .dot { width: 14px; height: 14px; border-radius: 50%; background: #b9ff6a; box-shadow: 0 0 0 5px rgba(185,255,106,.25), 0 0 14px #b9ff6a; }
+
+  .headline { position: absolute; left: 64px; top: 168px; right: 64px; }
+  .h1 { font-weight: 900; font-size: 116px; line-height: 1.0; letter-spacing: -3px; color: #1c0f45; }
+  .h2 { font-weight: 800; font-size: 76px; line-height: 1.1; letter-spacing: -2px; margin-top: 4px;
+    background: linear-gradient(90deg, #5a1fe0 0%, #8b45ff 55%, #b07bff 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .swoosh { display: block; width: 360px; height: 18px; margin-top: 2px; }
+  .kicker { margin-top: 8px; font-size: 24px; white-space: nowrap; font-weight: 500; color: #4a3a7a; }
+  .kicker b { color: #1c0f45; font-weight: 700; }
+
+  /* ---------- photo slot ---------- */
+  .photo { position: absolute; left: 64px; top: 470px; width: 540px; height: 520px; border-radius: 270px 270px 40px 40px; overflow: hidden;
+    background: linear-gradient(180deg, #efe7ff 0%, #d9c9ff 100%);
+    box-shadow: 0 30px 70px rgba(90,40,200,.22), inset 0 0 0 2px rgba(255,255,255,.9); }
+  .photo img.user { width: 100%; height: 100%; object-fit: cover; display: none; }
+  .photo .ph { position: absolute; inset: 18px; border-radius: 252px 252px 26px 26px; border: 3px dashed rgba(106,47,240,.45);
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-end; overflow: hidden; }
+  .photo .ph svg { width: 380px; height: auto; display: block; }
+  .photo .ph .lbl { position: absolute; top: 120px; left: 0; right: 0; text-align: center; font-weight: 700; font-size: 22px; letter-spacing: 4px; color: #6a2ff0; }
+  .photo .ph .lbl small { display: block; font-weight: 500; font-size: 17px; letter-spacing: 1px; color: #7d6aae; margin-top: 4px; }
+
+  /* ---------- small circular badge (project / org logo) ---------- */
+  .badge { position: absolute; left: 470px; top: 720px; width: 200px; height: 200px; border-radius: 50%; padding: 9px;
+    background: linear-gradient(135deg, #ffffff, #c9b1ff 50%, #6a2ff0); box-shadow: 0 22px 50px rgba(70,20,180,.35); z-index: 5; }
+  .badge .in { width: 100%; height: 100%; border-radius: 50%; overflow: hidden; position: relative; background: #fff; }
+  .badge .in > svg, .badge .in > img { width: 100%; height: 100%; display: block; object-fit: cover; }
+  .badge .tag { position: absolute; left: 50%; bottom: -16px; transform: translateX(-50%); white-space: nowrap; padding: 6px 16px; border-radius: 999px;
+    background: #1c0f45; color: #fff; font-size: 15px; font-weight: 700; letter-spacing: 2px; }
+  .spec { position: absolute; left: 430px; top: 680px; width: 280px; height: 280px; z-index: 4; pointer-events: none; }
+
+  /* ---------- name panel (glass) ---------- */
+  .panel { position: absolute; left: 40px; top: 940px; width: 640px; min-height: 140px; padding: 24px 28px; border-radius: 28px; z-index: 6;
+    display: flex; align-items: center; gap: 22px;
+    background: linear-gradient(135deg, rgba(255,255,255,.88), rgba(244,238,255,.72));
+    border: 1.5px solid rgba(255,255,255,.95);
+    box-shadow: 0 24px 60px rgba(80,30,190,.22), inset 0 1px 0 #fff;
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+  .panel .icon { flex: 0 0 84px; height: 84px; border-radius: 20px; background: linear-gradient(135deg, #8a4dff, #4b17c9);
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 22px rgba(90,30,220,.35), inset 0 1px 0 rgba(255,255,255,.4); }
+  .panel .icon svg { width: 44px; height: 44px; }
+  .panel .bar { flex: 0 0 2px; align-self: stretch; background: linear-gradient(180deg, transparent, #b9a3ee, transparent); }
+  .panel .txt { min-width: 0; }
+  .panel .name { font-weight: 800; font-size: 42px; line-height: 1.1; color: #1c0f45; letter-spacing: -.5px; }
+  .panel .sub { margin-top: 6px; font-size: 23px; line-height: 1.3; color: #4a3a7a; font-weight: 500; }
+
+  /* ---------- right column ---------- */
+  .chips { position: absolute; right: 64px; top: 492px; width: 290px; display: flex; flex-direction: column; gap: 14px; }
+  .chip { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 20px;
+    background: rgba(255,255,255,.7); border: 1.5px solid rgba(255,255,255,.95); box-shadow: 0 12px 30px rgba(90,40,200,.12); backdrop-filter: blur(10px); }
+  .chip .ci { flex: 0 0 46px; height: 46px; border-radius: 13px; background: linear-gradient(135deg, #efe6ff, #d6c3ff); display: flex; align-items: center; justify-content: center; }
+  .chip .ci svg { width: 26px; height: 26px; }
+  .chip b { display: block; font-size: 22px; font-weight: 800; color: #1c0f45; line-height: 1.1; }
+  .chip span { display: block; font-size: 16px; color: #6b5b98; font-weight: 500; }
+
+  .qr { position: absolute; right: 64px; top: 752px; width: 290px; padding: 22px 22px 18px; border-radius: 30px; background: #fff; text-align: center; z-index: 6;
+    box-shadow: 0 26px 60px rgba(80,30,190,.22), 0 0 0 1.5px rgba(150,110,240,.18); }
+  .qr img { width: 210px; height: 210px; display: block; margin: 0 auto; image-rendering: pixelated; }
+  .qr .cap { margin-top: 14px; font-size: 19px; line-height: 1.25; font-weight: 700; color: #1c0f45; }
+  .qr .url { margin-top: 8px; font-size: 17px; font-weight: 600; color: #6a2ff0; letter-spacing: .5px; }
+
+  /* ---------- CTA + footer ---------- */
+  .cta-row { position: absolute; left: 64px; right: 64px; top: 1118px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+  .cta { display: inline-flex; align-items: center; gap: 16px; padding: 14px 16px 14px 32px; border-radius: 999px; white-space: nowrap;
+    background: linear-gradient(90deg, #4b17c9, #7b3bff); color: #fff; font-size: 26px; font-weight: 700; box-shadow: 0 16px 34px rgba(90,30,220,.35); }
+  .cta .arr { width: 44px; height: 44px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; }
+  .tagline { text-align: right; }
+  .tagline .t { font-size: 27px; font-weight: 800; color: #1c0f45; letter-spacing: -.3px; }
+  .tagline .f { font-size: 19px; font-weight: 500; color: #5b4b8a; margin-top: 2px; }
+
+  .logos { position: absolute; left: 64px; right: 64px; bottom: 30px; height: 110px; border-radius: 24px; display: flex; align-items: center; justify-content: center; gap: 0;
+    background: rgba(255,255,255,.78); border: 1.5px solid rgba(255,255,255,.95); box-shadow: 0 14px 36px rgba(90,40,200,.14); backdrop-filter: blur(10px); }
+  .logos .cell { flex: 1; display: flex; align-items: center; justify-content: center; height: 100%; }
+  .logos .sep { width: 2px; height: 64px; background: #d8cdf3; }
+  .logos img.l1 { height: 62px; } .logos img.l2 { height: 84px; } .logos img.l3 { height: 54px; }
+
+  /* builder-only blueprint grid behind product circle */
+  .bp { display: none; }
+  .role-builder .bp { display: block; }
+</style>
+</head>
+<body>
+<div class="card" id="card">
+
+  <!-- decorative shapes -->
+  <svg class="ribbon" viewBox="0 0 820 560">
+    <defs>
+      <linearGradient id="rg" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#b48cff" stop-opacity=".0"/>
+        <stop offset=".25" stop-color="#9a64ff" stop-opacity=".55"/>
+        <stop offset=".6" stop-color="#c7a9ff" stop-opacity=".45"/>
+        <stop offset="1" stop-color="#7a3cf5" stop-opacity=".0"/>
+      </linearGradient>
+      <linearGradient id="rg2" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#ffffff" stop-opacity=".9"/>
+        <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path d="M10 420 C 160 300, 300 520, 470 430 S 760 250, 810 300" fill="none" stroke="url(#rg)" stroke-width="64" stroke-linecap="round"/>
+    <path d="M10 420 C 160 300, 300 520, 470 430 S 760 250, 810 300" fill="none" stroke="url(#rg2)" stroke-width="6" stroke-linecap="round" transform="translate(0,-22)"/>
+  </svg>
+  <div class="sphere s1"></div>
+  <div class="sphere glass s2"></div>
+  <div class="sphere glass s3"></div>
+  <div class="sphere s4"></div>
+  <div class="cube"><div class="f1"></div><div class="f2"></div><div class="f3"></div></div>
+
+  <!-- header -->
+  <div class="top">
+    <img class="brand" src="assets/logo_ideeza.png" alt="IDEEZA">
+    <div class="role"><span class="dot"></span><span id="role-text">BUILDER · PITCHING</span></div>
+  </div>
+
+  <div class="headline">
+    <div class="h1" id="h1">I built this.</div>
+    <div class="h2" id="h2">In 14 days with IDEEZA</div>
+    <svg class="swoosh" viewBox="0 0 360 18"><path d="M4 14 Q 180 -4 356 10" fill="none" stroke="#6a2ff0" stroke-width="5" stroke-linecap="round"/></svg>
+    <div class="kicker"><b>Builders' Lab 2.0</b> · IDEEZA x Women Techmakers x FCA Creators Hub</div>
+  </div>
+
+  <!-- photo slot -->
+  <div class="photo">
+    <img class="user" id="user-photo" alt="">
+    <div class="ph" id="photo-ph">
+      <div class="lbl">PHOTO SLOT<small>Upload your photo here</small></div>
+      <svg viewBox="0 0 380 300">
+        <defs><linearGradient id="sil" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a98bf0"/><stop offset="1" stop-color="#8460e0"/></linearGradient></defs>
+        <circle cx="190" cy="110" r="66" fill="url(#sil)" opacity=".75"/>
+        <path d="M40 300 C 40 215, 110 185, 190 185 C 270 185, 340 215, 340 300 Z" fill="url(#sil)" opacity=".75"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- builder blueprint spec lines behind badge -->
+  <svg class="spec bp" viewBox="0 0 280 280">
+    <defs>
+      <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="#7a4cf0" stroke-opacity=".35" stroke-width="1"/></pattern>
+      <radialGradient id="fade"><stop offset=".55" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+      <mask id="m"><rect width="280" height="280" fill="url(#fade)"/></mask>
+    </defs>
+    <rect width="280" height="280" fill="url(#grid)" mask="url(#m)"/>
+    <circle cx="140" cy="140" r="128" fill="none" stroke="#6a2ff0" stroke-opacity=".55" stroke-width="1.5" stroke-dasharray="6 6"/>
+    <path d="M140 0V20 M140 260V280 M0 140H20 M260 140H280" stroke="#6a2ff0" stroke-width="2"/>
+  </svg>
+
+  <!-- small circular badge: project image (builder) or org logo (mentor/judge) -->
+  <div class="badge" id="badge">
+    <div class="in" id="badge-in"></div>
+    <div class="tag" id="badge-tag">PROJECT</div>
+  </div>
+
+  <!-- name panel -->
+  <div class="panel">
+    <div class="icon" id="panel-icon"></div>
+    <div class="bar"></div>
+    <div class="txt">
+      <div class="name" id="name">Your Name</div>
+      <div class="sub" id="sub">Project Name — one-line pitch</div>
+    </div>
+  </div>
+
+  <!-- right column -->
+  <div class="chips">
+    <div class="chip"><div class="ci"><svg viewBox="0 0 24 24" fill="none" stroke="#5a1fe0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></div><div><b>Hardware</b><span>built on IDEEZA</span></div></div>
+    <div class="chip"><div class="ci"><svg viewBox="0 0 24 24" fill="none" stroke="#5a1fe0" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg></div><div><b>10,000 ETB</b><span>prize pool</span></div></div>
+  </div>
+
+  <div class="qr">
+    <img id="qr" src="assets/qr_waitlist.png" alt="QR code: ideeza.com/waitlist">
+    <div class="cap">Scan to join the<br>IDEEZA waitlist</div>
+    <div class="url">ideeza.com/waitlist</div>
+  </div>
+
+  <!-- CTA + footer -->
+  <div class="cta-row">
+    <div class="cta">Join the waitlist <span class="arr"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5a1fe0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>
+    <div class="tagline">
+      <div class="t">Next time, you're in the room.</div>
+      <div class="f">Pitch Day · Sat, Oct 10 · 6 Kilo, Addis Ababa</div>
+    </div>
+  </div>
+
+  <div class="logos">
+    <div class="cell"><img class="l1" src="assets/logo_ideeza.png" alt="IDEEZA"></div>
+    <div class="sep"></div>
+    <div class="cell"><img class="l2" src="assets/logo_wtm.png" alt="Women Techmakers"></div>
+    <div class="sep"></div>
+    <div class="cell"><img class="l3" src="assets/logo_fca.png" alt="FCA Creators Hub"></div>
+  </div>
+</div>
+
+<script>
+const ICONS = {
+  builder: '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg>',
+  mentor:  '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>',
+  judge:   '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/></svg>'
+};
+// placeholder hardware product: drone on a blueprint
+const DRONE = `<svg viewBox="0 0 200 200">
+  <defs><pattern id="g2" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M16 0H0V16" fill="none" stroke="#ffffff" stroke-opacity=".14"/></pattern>
+  <radialGradient id="bgD" cx=".5" cy=".4"><stop offset="0" stop-color="#5b28d6"/><stop offset="1" stop-color="#230d66"/></radialGradient></defs>
+  <rect width="200" height="200" fill="url(#bgD)"/><rect width="200" height="200" fill="url(#g2)"/><g transform="translate(14,8) scale(.86)">
+  <g stroke="#e9ddff" stroke-width="5" stroke-linecap="round"><path d="M100 100L52 58M100 100L148 58M100 100L52 142M100 100L148 142"/></g>
+  <g fill="none" stroke="#c6a8ff" stroke-width="3"><ellipse cx="52" cy="58" rx="30" ry="9"/><ellipse cx="148" cy="58" rx="30" ry="9"/><ellipse cx="52" cy="142" rx="30" ry="9"/><ellipse cx="148" cy="142" rx="30" ry="9"/></g>
+  <g fill="#ffffff"><circle cx="52" cy="58" r="6"/><circle cx="148" cy="58" r="6"/><circle cx="52" cy="142" r="6"/><circle cx="148" cy="142" r="6"/></g>
+  <rect x="78" y="84" width="44" height="32" rx="9" fill="#ffffff"/><rect x="88" y="92" width="24" height="16" rx="3" fill="#7b3bff"/>
+  <circle cx="100" cy="100" r="4" fill="#b9ff6a"/></g>
+</svg>`;
+const ORG = `<svg viewBox="0 0 200 200">
+  <defs><linearGradient id="og" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6f1ff"/><stop offset="1" stop-color="#e2d4ff"/></linearGradient></defs>
+  <rect width="200" height="200" fill="url(#og)"/>
+  <circle cx="100" cy="100" r="78" fill="none" stroke="#9c7ae8" stroke-width="3" stroke-dasharray="7 7"/>
+  <g fill="none" stroke="#6a2ff0" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M66 132V70l34-16 34 16v62"/><path d="M58 132h84"/><path d="M84 84h8M108 84h8M84 102h8M108 102h8M96 132v-14h8v14"/></g>
+  <text x="100" y="160" text-anchor="middle" font-family="Poppins" font-size="15" font-weight="700" fill="#5a1fe0" letter-spacing="2">LOGO</text>
+</svg>`;
+
+const ROLES = {
+  builder: { role: 'BUILDER · PITCHING', h1: 'I built this.', h2: 'In 14 days with IDEEZA', name: 'Your Name', sub: 'Project Name — one-line pitch', badge: DRONE, tag: 'MY PROJECT' },
+  mentor:  { role: 'MENTOR', h1: 'Mentoring at', h2: "Builders' Lab 2.0", name: 'Mentor Name', sub: 'Title, Company', badge: ORG, tag: 'COMPANY' },
+  judge:   { role: 'JUDGE',  h1: 'Judging at',   h2: "Builders' Lab 2.0", name: 'Judge Name',  sub: 'Title, Company', badge: ORG, tag: 'COMPANY' }
+};
+const p = new URLSearchParams(location.search);
+const r = ROLES[p.get('role')] ? p.get('role') : 'builder';
+const c = ROLES[r];
+document.getElementById('card').classList.add('role-' + r);
+document.getElementById('role-text').textContent = c.role;
+document.getElementById('h1').textContent = c.h1;
+document.getElementById('h2').textContent = c.h2;
+document.getElementById('name').textContent = p.get('name') || c.name;
+document.getElementById('sub').textContent = p.get('sub') || c.sub;
+document.getElementById('panel-icon').innerHTML = ICONS[r];
+document.getElementById('badge-tag').textContent = c.tag;
+document.getElementById('badge-in').innerHTML = p.get('badge') ? `<img src="${p.get('badge')}">` : c.badge;
+if (p.get('photo')) { const u = document.getElementById('user-photo'); u.src = p.get('photo'); u.style.display = 'block'; document.getElementById('photo-ph').style.display = 'none'; }
+// mentor/judge kicker tweak
+if (r !== 'builder') document.querySelector('.kicker').innerHTML = '<b>Pitch Day</b> · IDEEZA x Women Techmakers x FCA Creators Hub';
+</script>
+</body>
+</html>
