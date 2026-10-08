@@ -10,4 +10,6 @@ roles: {
 }
 ```
 
+For `/team` custom-role cards, set `teamRoleTemplate.frameSrc` in `src/lib/roleDisplay.ts` (e.g. `/frames/team.png`). The same slot coordinates apply.
+
 When `frameSrc` is `null`, the app draws the built-in lavender placeholder (gradient + glassy spheres). Slot positions (photo, badge, headlines, etc.) stay in that same config file — no component edits needed.
