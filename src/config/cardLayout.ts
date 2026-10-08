@@ -7,9 +7,10 @@
  *
  * How to swap the design:
  *  1. Drop full-bleed 1080×1350 PNG/SVG frames into `public/frames/`
- *     (e.g. builder.png, mentor.png, judge.png).
+ *     (e.g. builder.png, mentor.png, judge.png, team.png).
  *  2. Set each role's `frameSrc` below (e.g. '/frames/builder.png').
- *     Set to `null` to keep the built-in lavender placeholder background.
+ *     For /team custom-role cards, set `teamRoleTemplate.frameSrc` in
+ *     `src/lib/roleDisplay.ts`. `null` keeps the lavender placeholder.
  *  3. Nudge slot coordinates / fonts / colors below to match the new artwork.
  *  4. Replace logos in `public/logos/` (same filenames) — no code changes.
  *

@@ -214,8 +214,11 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Pan via object-position (inline); zoom via scale + matching origin */
   transform-origin: center center;
   display: block;
+  /* Fill the arch — never leave a flat empty band from translate */
+  position: relative;
 }
 
 .share-card__photo-ph {

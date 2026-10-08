@@ -5,7 +5,11 @@ Mobile-first share-card generator for **Builders' Lab 2.0 Pitch Day**
 
 Pick a role (Builder / Mentor / Judge), upload a photo, enter your name + subtitle, optionally add a project image or company logo, preview live, then download a crisp **1080×1350 PNG**. On phones that support it, you can also share the file via the Web Share API.
 
+Staff and custom roles use **`/team`** (e.g. `/team?role=Organizer`) — type your own role label; the pill and headline update live. A subtle link connects the two pages.
+
 Everything runs client-side. Nothing is uploaded or stored.
+
+Vercel serves SPA routes via `vercel.json` rewrites so `/team` works on direct load and refresh.
 
 ## Quick start
 
@@ -69,7 +73,7 @@ The card QR encodes `https://www.ideeza.com/waitlist` (plain URL, no referral tr
 
 ## Stack
 
-- Vite + React + TypeScript
+- Vite + React + TypeScript + React Router
 - Poppins (Google Fonts)
 - `html-to-image` for PNG export
 - `qrcode` for the waitlist QR
