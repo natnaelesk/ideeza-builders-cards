@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LinkedInIcon, XIcon } from './components/BrandIcons'
 import { ShareCard } from './components/ShareCard'
+import { ShareSheet } from './components/ShareSheet'
 import { Toast } from './components/Toast'
 import { cardLayout, ROLE_ORDER, type RoleId } from './config/cardLayout'
+import { modalCopy } from './config/shareText'
 import {
   canShareFiles,
   dataUrlToFile,
@@ -11,13 +13,18 @@ import {
   shareCardFile,
 } from './lib/exportCard'
 import { waitForFonts } from './lib/fonts'
-import { shareToSocial, type SocialPlatform } from './lib/socialShare'
+import type { SocialPlatform } from './lib/socialShare'
 import {
   defaultPhotoTransform,
   type CardFormState,
   type PhotoTransform,
 } from './types'
 import './App.css'
+
+interface ShareSheetState {
+  platform: SocialPlatform
+  imageDataUrl: string
+}
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -43,6 +50,7 @@ export default function App() {
   const [exporting, setExporting] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [shareSheet, setShareSheet] = useState<ShareSheetState | null>(null)
   const [previewScale, setPreviewScale] = useState(1)
   const [shareSupported, setShareSupported] = useState(false)
 
@@ -174,23 +182,19 @@ export default function App() {
 
   const onSocialShare = async (platform: SocialPlatform) => {
     try {
+      setStatus(modalCopy.preparing)
       const dataUrl = await runExport()
-      if (!dataUrl) return
-      const result = await shareToSocial({
-        platform,
-        fields: { role, name, sub },
-        dataUrl,
-        filename,
-      })
+      if (!dataUrl) {
+        setStatus(null)
+        setToast(modalCopy.prepareError)
+        return
+      }
       setStatus(null)
-      setToast(
-        result.copied
-          ? result.toast
-          : 'Card saved. Copy failed — paste the text from the composer if needed.',
-      )
+      setShareSheet({ platform, imageDataUrl: dataUrl })
     } catch (err) {
       console.error(err)
-      setToast('Couldn’t prepare the share. Try Download PNG instead.')
+      setStatus(null)
+      setToast(modalCopy.prepareError)
     }
   }
 
@@ -376,8 +380,8 @@ export default function App() {
           {status && <p className="app__status">{status}</p>}
           <p className="app__hint">
             Nothing is uploaded or stored — everything stays on your device.
-            Export is a crisp 1080×1350 PNG. LinkedIn / X save the card and copy
-            a ready-made post so you can attach the image and publish.
+            Export is a crisp 1080×1350 PNG. LinkedIn / X open a share sheet with
+            your card image and ready-made post text.
           </p>
         </form>
 
@@ -414,6 +418,16 @@ export default function App() {
       </footer>
 
       <Toast message={toast} onDismiss={() => setToast(null)} />
+
+      {shareSheet && (
+        <ShareSheet
+          platform={shareSheet.platform}
+          fields={{ role, name, sub }}
+          imageDataUrl={shareSheet.imageDataUrl}
+          filename={filename}
+          onClose={() => setShareSheet(null)}
+        />
+      )}
     </div>
   )
 }

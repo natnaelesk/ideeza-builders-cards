@@ -1,10 +1,10 @@
 /**
  * =============================================================================
- * IDEEZA Builders' Lab 2.0 — Social share post copy
+ * IDEEZA Builders' Lab 2.0 — Social share post copy + modal UI strings
  * =============================================================================
  *
- * Edit this file to change LinkedIn / X post text. Components only call
- * `buildLinkedInPost` / `buildXPost` / `buildShareUrls` — no hard-coded copy.
+ * Edit this file to change LinkedIn / X post text, IDEEZA link block, and
+ * share-sheet labels. Components only call builders / read `modalCopy`.
  *
  * Placeholders filled from the form when present:
  *   {name}     — person name
@@ -20,12 +20,68 @@ export const X_CHAR_LIMIT = 280
 /** X counts every http(s) URL as this many characters (t.co). */
 export const X_URL_WEIGHT = 23
 
+/** Structured IDEEZA links — defined once, used in LinkedIn posts + X modal. */
+export interface IdeezaLinkItem {
+  label: string
+  url: string
+}
+
+export interface IdeezaLinkGroup {
+  /** Optional heading (omit for the website-only top line) */
+  heading?: string
+  items: IdeezaLinkItem[]
+}
+
+export const IDEEZA_LINK_GROUPS: IdeezaLinkGroup[] = [
+  {
+    items: [{ label: '🌐 Website', url: 'https://www.ideeza.com/' }],
+  },
+  {
+    heading: 'IDEEZA Ethiopia',
+    items: [
+      { label: 'Instagram', url: 'http://instagram.com/ideeza_ethiopia/' },
+      {
+        label: 'LinkedIn',
+        url: 'https://www.linkedin.com/showcase/ideeza-ethiopia/',
+      },
+      { label: 'TikTok', url: 'https://www.tiktok.com/@ideeza.ethiopia' },
+    ],
+  },
+  {
+    heading: 'IDEEZA Global',
+    items: [
+      { label: 'Telegram', url: 'https://t.me/make_ideeza' },
+      { label: 'Instagram', url: 'http://instagram.com/the_ideeza/' },
+      {
+        label: 'LinkedIn',
+        url: 'https://www.linkedin.com/company/makeideeza/',
+      },
+      { label: 'TikTok', url: 'https://www.tiktok.com/@ideeza' },
+    ],
+  },
+]
+
+/** Render the structured link list as plain text (LinkedIn body / X links box). */
+export function formatIdeezaLinksBlock(
+  groups: IdeezaLinkGroup[] = IDEEZA_LINK_GROUPS,
+): string {
+  return groups
+    .map((group) => {
+      const lines: string[] = []
+      if (group.heading) lines.push(group.heading)
+      for (const item of group.items) {
+        lines.push(`${item.label}: ${item.url}`)
+      }
+      return lines.join('\n')
+    })
+    .join('\n\n')
+}
+
 export const SHARE_LINKS = {
-  ideazaEthiopia: 'https://www.linkedin.com/showcase/ideeza-ethiopia/',
-  ideazaCompany: 'https://www.linkedin.com/company/makeideeza/',
-  telegram: 'https://t.me/make_ideeza',
-  website: 'https://www.ideeza.com/',
   waitlist: WAITLIST_URL,
+  website: 'https://www.ideeza.com/',
+  /** Open LinkedIn feed/app — never use share-offsite (drops post text on mobile). */
+  linkedinFeed: 'https://www.linkedin.com/feed/',
 } as const
 
 const EVENT_LINE = '📅 Sat, Oct 10 · 📍 6 Kilo, Addis Ababa'
@@ -53,10 +109,9 @@ export interface LinkedInTemplates {
  */
 export const linkedInByRole: Record<RoleId, LinkedInTemplates> = {
   builder: {
-    opener:
-      "I'm pitching at IDEEZA Builders' Lab 2.0! 🚀",
+    opener: "I'm pitching at IDEEZA Builders' Lab 2.0! 🚀",
     detail:
-      'I built {project} in 14 days with IDEEZA, and on Pitch Day I\'m showing it to the room.',
+      "I built {project} in 14 days with IDEEZA, and on Pitch Day I'm showing it to the room.",
   },
   mentor: {
     opener:
@@ -73,6 +128,7 @@ export const linkedInByRole: Record<RoleId, LinkedInTemplates> = {
 /**
  * X (Twitter) templates. Keep short — `buildXPost` enforces the 280 limit
  * (URLs count as 23 each). Prefer `{project}` only when it fits.
+ * Full IDEEZA links live in the X modal's separate "IDEEZA links" box.
  */
 export const xByRole: Record<
   RoleId,
@@ -98,10 +154,33 @@ export const xByRole: Record<
   },
 }
 
-export const toastCopy = {
-  linkedin:
-    'Card saved · post text copied. Attach the image in LinkedIn and hit post.',
-  x: 'Card saved · post text copied. Attach the image on X and hit post.',
+/** UI strings for the share bottom-sheet / modal. */
+export const modalCopy = {
+  titles: {
+    linkedin: 'Share on LinkedIn',
+    x: 'Share on X',
+  },
+  steps: {
+    linkedin: '1) Save image  2) Copy text  3) Open LinkedIn, paste & attach',
+    x: '1) Save image  2) Copy text  3) Open X, paste & attach',
+  },
+  saveImage: 'Save image',
+  shareImageToApp: 'Share image to app…',
+  shareImageHint: 'Text copied — paste it as your caption if the app drops it.',
+  copyText: 'Copy text',
+  copied: 'Copied!',
+  openLinkedIn: 'Open LinkedIn',
+  openX: 'Open X',
+  close: 'Close',
+  imageAlt: 'Your share card (1080×1350)',
+  longPressHint: 'Tip: you can also long-press the image to save it.',
+  preparing: 'Preparing your card…',
+  prepareError: 'Couldn’t render the card. Try Download PNG instead.',
+  savedDownload: 'Image saved to your downloads.',
+  /** X-only: separate copyable link block for a reply/thread */
+  ideezaLinksLabel: 'IDEEZA links',
+  ideezaLinksHint: 'Paste as a reply or thread so the post stays under 280.',
+  copyLinks: 'Copy links',
 } as const
 
 /** Extract builder project name from "Project — pitch" / "Project - pitch". */
@@ -139,8 +218,11 @@ export function xWeightedLength(text: string): number {
   let len = urls.length * X_URL_WEIGHT
   for (const ch of rest) {
     const cp = ch.codePointAt(0) ?? 0
-    // Non-BMP (emoji, etc.) or common emoji presentation → weight 2
-    if (cp > 0xffff || (cp >= 0x2600 && cp <= 0x27bf) || (cp >= 0x1f300 && cp <= 0x1faff)) {
+    if (
+      cp > 0xffff ||
+      (cp >= 0x2600 && cp <= 0x27bf) ||
+      (cp >= 0x1f300 && cp <= 0x1faff)
+    ) {
       len += 2
     } else {
       len += 1
@@ -179,11 +261,7 @@ export function buildLinkedInPost(fields: ShareFields): string {
     '',
     "Next time, you're in the room. Join the waitlist: " + WAITLIST_URL,
     '',
-    'Follow IDEEZA:',
-    `IDEEZA Ethiopia: ${SHARE_LINKS.ideazaEthiopia}`,
-    `IDEEZA: ${SHARE_LINKS.ideazaCompany}`,
-    `Telegram: ${SHARE_LINKS.telegram}`,
-    `Website: ${SHARE_LINKS.website}`,
+    formatIdeezaLinksBlock(),
     '',
     HASHTAGS_FULL,
   )
@@ -193,7 +271,8 @@ export function buildLinkedInPost(fields: ShareFields): string {
 
 /**
  * Build an X post ≤ 280 weighted chars. Trims `{project}` then drops a hashtag
- * if still over the limit.
+ * if still over the limit. Does NOT include the full IDEEZA links block —
+ * that lives in the X modal's separate copyable section.
  */
 export function buildXPost(fields: ShareFields): string {
   const project = extractProject(fields.sub)
@@ -212,7 +291,6 @@ export function buildXPost(fields: ShareFields): string {
   let text = tryBuild(project, HASHTAGS_FULL)
   if (xWeightedLength(text) <= X_CHAR_LIMIT) return text
 
-  // Trim project name gradually
   if (project) {
     for (let max = Math.min(project.length, 40); max >= 8; max -= 2) {
       const trimmed =
@@ -220,9 +298,6 @@ export function buildXPost(fields: ShareFields): string {
       text = tryBuild(trimmed, HASHTAGS_FULL)
       if (xWeightedLength(text) <= X_CHAR_LIMIT) return text
     }
-    // Drop project entirely
-    text = tryBuild('', HASHTAGS_FULL)
-    // Rebuild without empty "I built  in"
     text = collapseSpaces(
       fill(tpl.withoutProject, {
         project: '',
@@ -245,22 +320,16 @@ export function buildXPost(fields: ShareFields): string {
   )
   if (xWeightedLength(text) <= X_CHAR_LIMIT) return text
 
-  // Last resort hard slice (should not happen with current templates)
   while (xWeightedLength(text) > X_CHAR_LIMIT && text.length > 0) {
     text = text.slice(0, -1)
   }
   return text.trim()
 }
 
-export function buildShareUrls(text: string): { x: string; linkedin: string } {
-  const encoded = encodeURIComponent(text)
+/** Platform open URLs — LinkedIn is feed only (no share-offsite). */
+export function buildOpenUrls(text: string): { x: string; linkedin: string } {
   return {
-    x: `https://x.com/intent/post?text=${encoded}`,
-    linkedin: `https://www.linkedin.com/feed/?shareActive=true&text=${encoded}`,
+    x: `https://x.com/intent/post?text=${encodeURIComponent(text)}`,
+    linkedin: SHARE_LINKS.linkedinFeed,
   }
-}
-
-/** Fallback LinkedIn share if the composer URL is blocked / fails. */
-export function linkedInFallbackUrl(): string {
-  return `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(WAITLIST_URL)}`
 }
