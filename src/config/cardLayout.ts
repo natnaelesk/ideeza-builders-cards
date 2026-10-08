@@ -323,7 +323,7 @@ export const cardLayout: CardLayoutConfig = {
       nameLabel: 'Your name',
       namePlaceholder: 'Hana Tadesse',
       subLabel: 'Project name + one-line pitch',
-      subPlaceholder: 'SoilSense — soil moisture for small farms',
+      subPlaceholder: 'SoilSense — moisture intel for small farms',
       badgeTag: 'MY PROJECT',
       badgeUploadLabel: 'Project image (optional)',
       panelIcon: 'wrench',

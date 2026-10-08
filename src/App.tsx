@@ -25,30 +25,12 @@ function readFileAsDataUrl(file: File): Promise<string> {
   })
 }
 
-const SAMPLE: Record<
-  RoleId,
-  { name: string; sub: string }
-> = {
-  builder: {
-    name: 'Hana Tadesse',
-    sub: 'SoilSense — moisture intel for small farms',
-  },
-  mentor: {
-    name: 'Sara Bekele',
-    sub: 'Hardware Lead, Acme Labs',
-  },
-  judge: {
-    name: 'Meron Alemu',
-    sub: 'Partner, Addis Ventures',
-  },
-}
-
 export default function App() {
   const [role, setRole] = useState<RoleId>('builder')
   const roleCfg = cardLayout.roles[role]
 
-  const [name, setName] = useState(SAMPLE.builder.name)
-  const [sub, setSub] = useState(SAMPLE.builder.sub)
+  const [name, setName] = useState('')
+  const [sub, setSub] = useState('')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [badgeUrl, setBadgeUrl] = useState<string | null>(null)
   const [photoTransform, setPhotoTransform] = useState<PhotoTransform>(
@@ -57,11 +39,11 @@ export default function App() {
   const [fontsReady, setFontsReady] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
-  const [previewScale, setPreviewScale] = useState(0.32)
+  const [previewScale, setPreviewScale] = useState(1)
   const [shareSupported, setShareSupported] = useState(false)
 
   const cardRef = useRef<HTMLDivElement>(null)
-  const previewWrapRef = useRef<HTMLDivElement>(null)
+  const previewViewportRef = useRef<HTMLDivElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const badgeInputRef = useRef<HTMLInputElement>(null)
 
@@ -71,13 +53,13 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const el = previewWrapRef.current
+    const el = previewViewportRef.current
     if (!el) return
     const update = () => {
-      const pad = 24
-      const w = el.clientWidth - pad
-      const scale = Math.min(1, Math.max(0.22, w / cardLayout.width))
-      setPreviewScale(scale)
+      // Fit the 1080-wide card into the viewport's content box exactly.
+      const w = el.clientWidth
+      if (w <= 0) return
+      setPreviewScale(Math.min(1, w / cardLayout.width))
     }
     update()
     const ro = new ResizeObserver(update)
@@ -87,8 +69,7 @@ export default function App() {
 
   const onRoleChange = (next: RoleId) => {
     setRole(next)
-    setName(SAMPLE[next].name)
-    setSub(SAMPLE[next].sub)
+    // Keep typed values; clear badge since label meaning changes
     setBadgeUrl(null)
     if (badgeInputRef.current) badgeInputRef.current.value = ''
   }
@@ -355,12 +336,13 @@ export default function App() {
           </p>
         </form>
 
-        <div className="app__preview" ref={previewWrapRef}>
+        <div className="app__preview">
           <div className="app__preview-label">Live preview</div>
           <div
-            className="app__preview-stage"
+            className="app__preview-viewport"
+            ref={previewViewportRef}
             style={{
-              width: cardLayout.width * previewScale,
+              // Height tracks scale so the page doesn't reserve 1350px.
               height: cardLayout.height * previewScale,
             }}
           >

@@ -12,6 +12,9 @@
     linear-gradient(180deg, #fbfaff 0%, #efe8ff 100%);
   color: var(--navy);
   font-family: Poppins, system-ui, sans-serif;
+  overflow-x: hidden;
+  max-width: 100vw;
+  box-sizing: border-box;
 }
 
 .app__header {
@@ -81,6 +84,8 @@
   display: flex;
   flex-direction: column;
   gap: 22px;
+  width: 100%;
+  min-width: 0;
 }
 
 .app__form {
@@ -123,6 +128,11 @@
 .field > input:not([type='file']):not([type='range']):focus {
   outline: 2px solid rgba(106, 47, 240, 0.35);
   border-color: var(--violet);
+}
+
+.field > input:not([type='file']):not([type='range'])::placeholder {
+  color: rgba(91, 75, 138, 0.55);
+  font-weight: 500;
 }
 
 .field input[type='file'] {
@@ -233,9 +243,11 @@
 .app__preview {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 10px;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .app__preview-label {
@@ -247,20 +259,31 @@
   align-self: flex-start;
 }
 
-.app__preview-stage {
+/*
+  Viewport is always 100% of the preview column. The 1080×1350 card sits
+  absolutely inside so it never expands layout / causes horizontal scroll.
+  Scale is set in JS as clientWidth / 1080.
+*/
+.app__preview-viewport {
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow: hidden;
   border-radius: 18px;
   box-shadow:
     0 24px 60px rgba(80, 30, 190, 0.18),
     0 0 0 1px rgba(150, 110, 240, 0.15);
   background: #fbfaff;
-  max-width: 100%;
 }
 
 .app__preview-scale {
+  position: absolute;
+  top: 0;
+  left: 0;
   transform-origin: top left;
   will-change: transform;
+  pointer-events: none;
 }
 
 .app__footer {
