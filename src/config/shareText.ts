@@ -111,7 +111,7 @@ export const linkedInByRole: Record<RoleId, LinkedInTemplates> = {
   builder: {
     opener: "I'm pitching at IDEEZA Builders' Lab 2.0! 🚀",
     detail:
-      "I built {project} in 14 days with IDEEZA, and on Pitch Day I'm showing it to the room.",
+      "I built {project} within minutes using IDEEZA, and on Pitch Day I'm showing it to the room.",
   },
   mentor: {
     opener:
@@ -120,7 +120,7 @@ export const linkedInByRole: Record<RoleId, LinkedInTemplates> = {
   },
   judge: {
     opener:
-      "I'm judging at IDEEZA Builders' Lab 2.0! Can't wait to see what these builders shipped in 14 days.",
+      "I'm judging at IDEEZA Builders' Lab 2.0! Can't wait to see what these builders shipped within minutes.",
     detail: '',
   },
 }
@@ -136,9 +136,9 @@ export const xByRole: Record<
 > = {
   builder: {
     withProject:
-      "I built {project} in 14 days with IDEEZA and I'm pitching it at Builders' Lab 2.0 🚀 Sat, Oct 10 · 6 Kilo, Addis Ababa. Next time, you're in the room: {waitlist} {hashtags}",
+      "I built {project} within minutes using IDEEZA and I'm pitching it at Builders' Lab 2.0 🚀 Sat, Oct 10 · 6 Kilo, Addis Ababa. Next time, you're in the room: {waitlist} {hashtags}",
     withoutProject:
-      "I built something in 14 days with IDEEZA and I'm pitching it at Builders' Lab 2.0 🚀 Sat, Oct 10 · 6 Kilo, Addis Ababa. Next time, you're in the room: {waitlist} {hashtags}",
+      "I built something within minutes using IDEEZA and I'm pitching it at Builders' Lab 2.0 🚀 Sat, Oct 10 · 6 Kilo, Addis Ababa. Next time, you're in the room: {waitlist} {hashtags}",
   },
   mentor: {
     withProject:
@@ -148,9 +148,9 @@ export const xByRole: Record<
   },
   judge: {
     withProject:
-      "Judging at IDEEZA Builders' Lab 2.0 🚀 Sat, Oct 10 · 6 Kilo, Addis Ababa. Can't wait to see what shipped in 14 days. Next time, you're in the room: {waitlist} {hashtags}",
+      "Judging at IDEEZA Builders' Lab 2.0 🚀 Sat, Oct 10 · 6 Kilo, Addis Ababa. Can't wait to see what shipped within minutes. Next time, you're in the room: {waitlist} {hashtags}",
     withoutProject:
-      "Judging at IDEEZA Builders' Lab 2.0 🚀 Sat, Oct 10 · 6 Kilo, Addis Ababa. Can't wait to see what shipped in 14 days. Next time, you're in the room: {waitlist} {hashtags}",
+      "Judging at IDEEZA Builders' Lab 2.0 🚀 Sat, Oct 10 · 6 Kilo, Addis Ababa. Can't wait to see what shipped within minutes. Next time, you're in the room: {waitlist} {hashtags}",
   },
 }
 
@@ -249,7 +249,7 @@ export function buildLinkedInPost(fields: ShareFields): string {
       parts.push(fill(tpl.detail, { project, name, title }))
     } else if (fields.role === 'builder') {
       parts.push(
-        "I built this in 14 days with IDEEZA, and on Pitch Day I'm showing it to the room.",
+        "I built this within minutes using IDEEZA, and on Pitch Day I'm showing it to the room.",
       )
     }
   }
