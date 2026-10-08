@@ -197,7 +197,9 @@ export const cardLayout: CardLayoutConfig = {
       },
       h2: {
         fontFamily: 'Poppins, sans-serif',
-        fontSize: 68,
+        // 64 keeps "Within minutes using IDEEZA" on one line in the 952px slot
+        // (68px measured ~973px wide and wrapped).
+        fontSize: 64,
         fontWeight: 800,
         color: '#5a1fe0',
         letterSpacing: -1.5,
@@ -315,7 +317,7 @@ export const cardLayout: CardLayoutConfig = {
     builder: {
       pillLabel: 'BUILDER · PITCHING',
       headline1: 'I built this.',
-      headline2: 'In 14 days with IDEEZA',
+      headline2: 'Within minutes using IDEEZA',
       kickerHtml:
         "<b>Builders' Lab 2.0</b> · IDEEZA x Women Techmakers x FCA Creators Hub",
       defaultName: 'Your Name',
