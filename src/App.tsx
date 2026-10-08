@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { LinkedInIcon, XIcon } from './components/BrandIcons'
 import { ShareCard } from './components/ShareCard'
+import { Toast } from './components/Toast'
 import { cardLayout, ROLE_ORDER, type RoleId } from './config/cardLayout'
 import {
   canShareFiles,
@@ -9,6 +11,7 @@ import {
   shareCardFile,
 } from './lib/exportCard'
 import { waitForFonts } from './lib/fonts'
+import { shareToSocial, type SocialPlatform } from './lib/socialShare'
 import {
   defaultPhotoTransform,
   type CardFormState,
@@ -39,6 +42,7 @@ export default function App() {
   const [fontsReady, setFontsReady] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
   const [previewScale, setPreviewScale] = useState(1)
   const [shareSupported, setShareSupported] = useState(false)
 
@@ -165,6 +169,28 @@ export default function App() {
       }
       console.error(err)
       setStatus('Share failed. Try downloading instead.')
+    }
+  }
+
+  const onSocialShare = async (platform: SocialPlatform) => {
+    try {
+      const dataUrl = await runExport()
+      if (!dataUrl) return
+      const result = await shareToSocial({
+        platform,
+        fields: { role, name, sub },
+        dataUrl,
+        filename,
+      })
+      setStatus(null)
+      setToast(
+        result.copied
+          ? result.toast
+          : 'Card saved. Copy failed — paste the text from the composer if needed.',
+      )
+    } catch (err) {
+      console.error(err)
+      setToast('Couldn’t prepare the share. Try Download PNG instead.')
     }
   }
 
@@ -317,6 +343,24 @@ export default function App() {
             >
               {exporting ? 'Rendering…' : 'Download PNG'}
             </button>
+            <button
+              type="button"
+              className="btn btn--linkedin"
+              disabled={exporting || !fontsReady}
+              onClick={() => void onSocialShare('linkedin')}
+            >
+              <LinkedInIcon />
+              <span>Share on LinkedIn</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn--x"
+              disabled={exporting || !fontsReady}
+              onClick={() => void onSocialShare('x')}
+            >
+              <XIcon />
+              <span>Share on X</span>
+            </button>
             {shareSupported && (
               <button
                 type="button"
@@ -332,7 +376,8 @@ export default function App() {
           {status && <p className="app__status">{status}</p>}
           <p className="app__hint">
             Nothing is uploaded or stored — everything stays on your device.
-            Export is a crisp 1080×1350 PNG.
+            Export is a crisp 1080×1350 PNG. LinkedIn / X save the card and copy
+            a ready-made post so you can attach the image and publish.
           </p>
         </form>
 
@@ -367,6 +412,8 @@ export default function App() {
         <span aria-hidden>·</span>
         <span>FCA Creators Hub</span>
       </footer>
+
+      <Toast message={toast} onDismiss={() => setToast(null)} />
     </div>
   )
 }
