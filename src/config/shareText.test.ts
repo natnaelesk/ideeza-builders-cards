@@ -2,6 +2,7 @@
  * Length guard for X posts — run with: npm run test:share
  */
 import assert from 'node:assert/strict'
+import { indefiniteArticle } from '../lib/roleDisplay'
 import {
   buildLinkedInPost,
   buildXPost,
@@ -60,9 +61,43 @@ check(
   'judge/typical',
 )
 
+check(
+  {
+    role: 'custom',
+    customRole: 'Organizer',
+    name: 'Natnael Eskinder',
+    sub: 'Community Lead, IDEEZA',
+  },
+  'custom/organizer',
+)
+check(
+  {
+    role: 'custom',
+    customRole: 'Volunteer',
+    name: 'Hana',
+    sub: 'WTM Ethiopia',
+  },
+  'custom/volunteer',
+)
+check(
+  {
+    role: 'custom',
+    customRole: 'Senior Partnerships Photographer',
+    name: 'Someone',
+    sub: 'Title, Company',
+  },
+  'custom/long-role',
+)
+check({ role: 'custom', customRole: '', name: '', sub: '' }, 'custom/empty')
+
 assert.equal(extractProject('SoilSense — pitch'), 'SoilSense')
 assert.equal(extractProject('SoilSense - pitch'), 'SoilSense')
 assert.equal(extractProject(''), '')
+
+assert.equal(indefiniteArticle('Organizer'), 'an')
+assert.equal(indefiniteArticle('Volunteer'), 'a')
+assert.equal(indefiniteArticle('Host'), 'a')
+assert.equal(indefiniteArticle('Emcee'), 'an')
 
 const li = buildLinkedInPost({
   role: 'builder',
@@ -78,6 +113,23 @@ assert.ok(li.includes('instagram.com/ideeza_ethiopia'))
 assert.ok(li.includes('tiktok.com/@ideeza'))
 assert.ok(li.includes('🌐 Website'))
 
+const liCustom = buildLinkedInPost({
+  role: 'custom',
+  customRole: 'Organizer',
+  name: 'Nati',
+  sub: 'Community Lead',
+})
+assert.ok(liCustom.includes("I'm an Organizer at IDEEZA"))
+assert.ok(liCustom.includes('Nati'))
+
+const liVol = buildLinkedInPost({
+  role: 'custom',
+  customRole: 'Volunteer',
+  name: '',
+  sub: '',
+})
+assert.ok(liVol.includes("I'm a Volunteer at IDEEZA"))
+
 const xPost = buildXPost({
   role: 'builder',
   name: 'Hana',
@@ -86,6 +138,15 @@ const xPost = buildXPost({
 assert.ok(!xPost.includes('IDEEZA Ethiopia'))
 assert.ok(!xPost.includes('tiktok.com'))
 assert.ok(xPost.includes('ideeza.com/waitlist'))
+
+const xCustomPost = buildXPost({
+  role: 'custom',
+  customRole: 'Speaker',
+  name: 'Abebe',
+  sub: 'Host',
+})
+assert.ok(xCustomPost.includes('Speaker'))
+assert.ok(xCustomPost.toLowerCase().includes("i'm a speaker"))
 
 const links = formatIdeezaLinksBlock()
 assert.ok(links.includes('IDEEZA Ethiopia'))

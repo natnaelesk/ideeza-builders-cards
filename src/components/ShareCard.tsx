@@ -1,6 +1,12 @@
 import { useEffect, useState, type Ref } from 'react'
 import QRCode from 'qrcode'
-import { cardLayout, type RoleId } from '../config/cardLayout'
+import { cardLayout } from '../config/cardLayout'
+import {
+  isBuilderStyle,
+  resolveRoleConfig,
+  scaledHeadline1Size,
+  scaledPillFontSize,
+} from '../lib/roleDisplay'
 import type { CardFormState } from '../types'
 import {
   ArrowIcon,
@@ -31,9 +37,10 @@ function abs(slot: { x: number; y: number; w: number; h: number }) {
 
 export function ShareCard({ state, cardRef, className }: ShareCardProps) {
   const layout = cardLayout
-  const role = layout.roles[state.role]
+  const role = resolveRoleConfig(state)
   const { slots, colors, logos } = layout
   const [qrDataUrl, setQrDataUrl] = useState<string>('')
+  const builderStyle = isBuilderStyle(state)
 
   useEffect(() => {
     let cancelled = false
@@ -58,18 +65,27 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
   const sub = subEntered || role.defaultSub
   const hasPhoto = Boolean(state.photoUrl)
   const t = state.photoTransform
+  // object-position + matching transform-origin: pan the cover crop without
+  // translating the <img> out of the arch (which left a flat empty band).
+  const posX = 50 + t.x
+  const posY = 50 - t.y
+  const h1Size = scaledHeadline1Size(role.headline1, slots.headline.h1.fontSize)
+  const pillSize = scaledPillFontSize(role.pillLabel, slots.rolePill.fontSize)
+  const roleKey = state.customRole?.trim()
+    ? 'custom'
+    : state.role
 
   return (
     <div
       ref={cardRef}
-      className={`share-card role-${state.role}${className ? ` ${className}` : ''}`}
+      className={`share-card role-${roleKey}${className ? ` ${className}` : ''}`}
       style={{
         width: layout.width,
         height: layout.height,
         fontFamily: layout.fontFamily,
         color: colors.navy,
       }}
-      data-role={state.role}
+      data-role={roleKey}
     >
       {/* Background: designer frame OR procedural placeholder */}
       {role.frameSrc ? (
@@ -98,7 +114,7 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
         className="share-card__role-pill"
         style={{
           ...abs(slots.rolePill),
-          fontSize: slots.rolePill.fontSize,
+          fontSize: pillSize,
           letterSpacing: slots.rolePill.letterSpacing,
           padding: `${slots.rolePill.paddingY}px ${slots.rolePill.paddingX}px`,
         }}
@@ -115,7 +131,7 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
         <div
           className="share-card__h1"
           style={{
-            fontSize: slots.headline.h1.fontSize,
+            fontSize: h1Size,
             fontWeight: slots.headline.h1.fontWeight,
             color: slots.headline.h1.color,
             letterSpacing: slots.headline.h1.letterSpacing,
@@ -169,7 +185,7 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
         />
       </div>
 
-      {/* Photo */}
+      {/* Photo — only the arch mask clips; pan via object-position */}
       <div
         className="share-card__photo"
         style={{
@@ -184,7 +200,9 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
             alt=""
             draggable={false}
             style={{
-              transform: `translate(${t.x}%, ${t.y}%) scale(${t.zoom})`,
+              objectPosition: `${posX}% ${posY}%`,
+              transform: `scale(${t.zoom})`,
+              transformOrigin: `${posX}% ${posY}%`,
             }}
           />
         ) : (
@@ -263,7 +281,7 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
         <div className="share-card__badge-in">
           {state.badgeUrl ? (
             <img src={state.badgeUrl} alt="" draggable={false} />
-          ) : state.role === 'builder' ? (
+          ) : builderStyle ? (
             <DefaultProjectBadge />
           ) : (
             <DefaultCompanyBadge />
@@ -508,9 +526,4 @@ function ProceduralBackground() {
       </div>
     </div>
   )
-}
-
-/** Helper for typing role in data attributes / class names */
-export function roleClass(role: RoleId) {
-  return `role-${role}`
 }

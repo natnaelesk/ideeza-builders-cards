@@ -44,6 +44,25 @@
   font-weight: 500;
 }
 
+.app__crosslink {
+  margin: 0 0 16px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.app__crosslink a {
+  color: var(--violet);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.app__crosslink a:hover {
+  color: var(--navy);
+}
+
 .app__roles {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

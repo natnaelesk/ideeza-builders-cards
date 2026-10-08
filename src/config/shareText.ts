@@ -9,10 +9,13 @@
  * Placeholders filled from the form when present:
  *   {name}     — person name
  *   {project}  — builder project (from subtitle, before an em/en dash)
- *   {title}    — mentor/judge title + company (full subtitle)
+ *   {title}    — mentor/judge/team title + company (full subtitle)
+ *   {role}     — typed team role (Organizer, Volunteer, …)
+ *   {a}        — a/an for the typed role
  * =============================================================================
  */
 
+import { indefiniteArticle } from '../lib/roleDisplay'
 import type { RoleId } from './cardLayout'
 
 export const WAITLIST_URL = 'https://www.ideeza.com/waitlist'
@@ -89,11 +92,15 @@ const PARTNERS = 'IDEEZA x Women Techmakers Ethiopia x FCA Creators Hub'
 const HASHTAGS_FULL = '#IDEEZA #BuildersLab #WomenTechmakers'
 const HASHTAGS_SHORT = '#IDEEZA #BuildersLab'
 
+export type ShareRoleId = RoleId | 'custom'
+
 export interface ShareFields {
-  role: RoleId
+  role: ShareRoleId
   name: string
   /** Raw subtitle from the form (project pitch or title, company) */
   sub: string
+  /** Required when role === 'custom' — typed label on /team */
+  customRole?: string
 }
 
 export interface LinkedInTemplates {
@@ -125,6 +132,13 @@ export const linkedInByRole: Record<RoleId, LinkedInTemplates> = {
   },
 }
 
+/** LinkedIn opener for /team custom roles. `{a}` = a/an, `{role}` = typed label. */
+export const linkedInCustom: LinkedInTemplates = {
+  opener:
+    "I'm {a} {role} at IDEEZA Builders' Lab 2.0! Proud to be part of Pitch Day with this crew.",
+  detail: '',
+}
+
 /**
  * X (Twitter) templates. Keep short — `buildXPost` enforces the 280 limit
  * (URLs count as 23 each). Prefer `{project}` only when it fits.
@@ -152,6 +166,14 @@ export const xByRole: Record<
     withoutProject:
       "Judging at IDEEZA Builders' Lab 2.0 🚀 Sat, Oct 10 · 6 Kilo, Addis Ababa. Can't wait to see what shipped within minutes. Next time, you're in the room: {waitlist} {hashtags}",
   },
+}
+
+/** X templates for /team — keep short; `{role}` may be truncated to fit 280. */
+export const xCustom = {
+  withRole:
+    "I'm {a} {role} at IDEEZA Builders' Lab 2.0 🚀 Sat, Oct 10 · 6 Kilo, Addis Ababa. Next time, you're in the room: {waitlist} {hashtags}",
+  withoutRole:
+    "Part of the crew at IDEEZA Builders' Lab 2.0 🚀 Sat, Oct 10 · 6 Kilo, Addis Ababa. Next time, you're in the room: {waitlist} {hashtags}",
 }
 
 /** UI strings for the share bottom-sheet / modal. */
@@ -231,14 +253,31 @@ export function xWeightedLength(text: string): number {
   return len
 }
 
+function customRoleLabel(fields: ShareFields): string {
+  return (fields.customRole ?? '').trim() || 'team member'
+}
+
 export function buildLinkedInPost(fields: ShareFields): string {
   const name = fields.name.trim()
   const sub = fields.sub.trim()
   const project = extractProject(sub)
   const title = sub
-  const tpl = linkedInByRole[fields.role]
 
-  const parts: string[] = [tpl.opener]
+  const tpl =
+    fields.role === 'custom'
+      ? linkedInCustom
+      : linkedInByRole[fields.role]
+
+  const roleLabel = customRoleLabel(fields)
+  const opener =
+    fields.role === 'custom'
+      ? fill(tpl.opener, {
+          role: roleLabel,
+          a: indefiniteArticle(roleLabel),
+        })
+      : tpl.opener
+
+  const parts: string[] = [opener]
 
   if (name || title) {
     parts.push(`— ${[name, title].filter(Boolean).join(', ')}`)
@@ -274,7 +313,52 @@ export function buildLinkedInPost(fields: ShareFields): string {
  * if still over the limit. Does NOT include the full IDEEZA links block —
  * that lives in the X modal's separate copyable section.
  */
+function buildCustomXPost(fields: ShareFields): string {
+  const roleLabel = customRoleLabel(fields)
+  const hasRole = Boolean((fields.customRole ?? '').trim())
+
+  const tryBuild = (role: string, hashtags: string) => {
+    const article = indefiniteArticle(role)
+    const tpl = role ? xCustom.withRole : xCustom.withoutRole
+    return collapseSpaces(
+      fill(tpl, {
+        role,
+        a: article,
+        waitlist: WAITLIST_URL,
+        hashtags,
+      }),
+    )
+  }
+
+  let text = tryBuild(hasRole ? roleLabel : '', HASHTAGS_FULL)
+  if (xWeightedLength(text) <= X_CHAR_LIMIT) return text
+
+  if (hasRole) {
+    for (let max = Math.min(roleLabel.length, 28); max >= 6; max -= 2) {
+      const trimmed =
+        roleLabel.length > max
+          ? roleLabel.slice(0, max - 1).trimEnd() + '…'
+          : roleLabel
+      text = tryBuild(trimmed, HASHTAGS_FULL)
+      if (xWeightedLength(text) <= X_CHAR_LIMIT) return text
+    }
+  }
+
+  text = tryBuild(hasRole ? roleLabel.slice(0, 10) + '…' : '', HASHTAGS_SHORT)
+  if (xWeightedLength(text) <= X_CHAR_LIMIT) return text
+
+  text = tryBuild('', '#IDEEZA')
+  if (xWeightedLength(text) <= X_CHAR_LIMIT) return text
+
+  while (xWeightedLength(text) > X_CHAR_LIMIT && text.length > 0) {
+    text = text.slice(0, -1)
+  }
+  return text.trim()
+}
+
 export function buildXPost(fields: ShareFields): string {
+  if (fields.role === 'custom') return buildCustomXPost(fields)
+
   const project = extractProject(fields.sub)
   const tpl = xByRole[fields.role]
   const baseTpl = project ? tpl.withProject : tpl.withoutProject
