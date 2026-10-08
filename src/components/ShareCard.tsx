@@ -1,11 +1,14 @@
-import { useEffect, useState, type Ref } from 'react'
+import { useLayoutEffect, useEffect, useRef, useState, type Ref } from 'react'
 import QRCode from 'qrcode'
 import { cardLayout } from '../config/cardLayout'
+import { fitFontSize } from '../lib/fitText'
 import {
   isBuilderStyle,
   resolveRoleConfig,
   scaledHeadline1Size,
+  scaledHeadline2Size,
   scaledPillFontSize,
+  TEAM_HEADLINE_MAX_W,
 } from '../lib/roleDisplay'
 import type { CardFormState } from '../types'
 import {
@@ -69,11 +72,26 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
   // translating the <img> out of the arch (which left a flat empty band).
   const posX = 50 + t.x
   const posY = 50 - t.y
-  const h1Size = scaledHeadline1Size(role.headline1, slots.headline.h1.fontSize)
+  const isCustom = Boolean(state.customRole?.trim())
+  const h1Max = scaledHeadline1Size(role.headline1, slots.headline.h1.fontSize)
+  const h2Max = isCustom
+    ? scaledHeadline2Size(role.headline2, slots.headline.h2.fontSize)
+    : slots.headline.h2.fontSize
   const pillSize = scaledPillFontSize(role.pillLabel, slots.rolePill.fontSize)
-  const roleKey = state.customRole?.trim()
-    ? 'custom'
-    : state.role
+  const roleKey = isCustom ? 'custom' : state.role
+  const headlineW = isCustom
+    ? Math.min(slots.headline.w, TEAM_HEADLINE_MAX_W)
+    : slots.headline.w
+
+  const h1Ref = useRef<HTMLDivElement>(null)
+  const h2Ref = useRef<HTMLDivElement>(null)
+  const [h1Size, setH1Size] = useState(h1Max)
+  const [h2Size, setH2Size] = useState(h2Max)
+
+  useLayoutEffect(() => {
+    setH1Size(fitFontSize(h1Ref.current, h1Max, 36))
+    setH2Size(fitFontSize(h2Ref.current, h2Max, 36))
+  }, [role.headline1, role.headline2, h1Max, h2Max, headlineW])
 
   return (
     <div
@@ -126,9 +144,14 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
       {/* Headline */}
       <div
         className="share-card__headline"
-        style={{ left: slots.headline.x, top: slots.headline.y, width: slots.headline.w }}
+        style={{
+          left: slots.headline.x,
+          top: slots.headline.y,
+          width: headlineW,
+        }}
       >
         <div
+          ref={h1Ref}
           className="share-card__h1"
           style={{
             fontSize: h1Size,
@@ -141,9 +164,10 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
           {role.headline1}
         </div>
         <div
+          ref={h2Ref}
           className="share-card__h2"
           style={{
-            fontSize: slots.headline.h2.fontSize,
+            fontSize: h2Size,
             fontWeight: slots.headline.h2.fontWeight,
             letterSpacing: slots.headline.h2.letterSpacing,
             lineHeight: slots.headline.h2.lineHeight,

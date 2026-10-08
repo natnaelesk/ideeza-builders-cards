@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { LinkedInIcon, XIcon } from './components/BrandIcons'
 import { ShareCard } from './components/ShareCard'
 import { ShareSheet } from './components/ShareSheet'
@@ -240,18 +239,6 @@ export function CardStudio({ mode, initialCustomRole = '' }: CardStudioProps) {
           </p>
         </div>
       </header>
-
-      {isTeam ? (
-        <p className="app__crosslink">
-          Builder, Mentor, or Judge?{' '}
-          <Link to="/">Use the Pitch Day card maker</Link>
-        </p>
-      ) : (
-        <p className="app__crosslink">
-          Organizer, volunteer, speaker, or other staff?{' '}
-          <Link to="/team">Make a team card</Link>
-        </p>
-      )}
 
       {!isTeam && (
         <section className="app__roles" aria-label="Choose your role">

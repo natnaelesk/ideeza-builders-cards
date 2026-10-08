@@ -119,7 +119,7 @@ const liCustom = buildLinkedInPost({
   name: 'Nati',
   sub: 'Community Lead',
 })
-assert.ok(liCustom.includes("I'm an Organizer at IDEEZA"))
+assert.ok(liCustom.includes("I'm an Organizer at IDEEZA Builders' Lab 2.0"))
 assert.ok(liCustom.includes('Nati'))
 
 const liVol = buildLinkedInPost({
@@ -128,7 +128,7 @@ const liVol = buildLinkedInPost({
   name: '',
   sub: '',
 })
-assert.ok(liVol.includes("I'm a Volunteer at IDEEZA"))
+assert.ok(liVol.includes("I'm a Volunteer at IDEEZA Builders' Lab 2.0"))
 
 const xPost = buildXPost({
   role: 'builder',
@@ -146,6 +146,7 @@ const xCustomPost = buildXPost({
   sub: 'Host',
 })
 assert.ok(xCustomPost.includes('Speaker'))
+assert.ok(xCustomPost.includes("IDEEZA Builders' Lab 2.0"))
 assert.ok(xCustomPost.toLowerCase().includes("i'm a speaker"))
 
 const links = formatIdeezaLinksBlock()
