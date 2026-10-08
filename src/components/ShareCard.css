@@ -181,10 +181,16 @@
 
 .share-card__h1 {
   letter-spacing: -3px;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .share-card__h2 {
   margin-top: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .share-card__swoosh {

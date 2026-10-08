@@ -5,11 +5,20 @@ import {
 } from '../config/cardLayout'
 import type { CardFormState } from '../types'
 
+/** Second headline line for /team — names IDEEZA so the phrase reads complete. */
+export const TEAM_HEADLINE2 = "IDEEZA Builders' Lab 2.0"
+
+/**
+ * Headline block width for team cards (px in 1080 space).
+ * Leaves clear air before the decorative cube (~right:72, 96px wide).
+ */
+export const TEAM_HEADLINE_MAX_W = 800
+
 /** Template for /team custom-role cards (company-logo style, no blueprint). */
 export const teamRoleTemplate: RoleConfig = {
   pillLabel: 'TEAM',
   headline1: 'Team at',
-  headline2: "Builders' Lab 2.0",
+  headline2: TEAM_HEADLINE2,
   kickerHtml:
     '<b>Pitch Day</b> · IDEEZA x Women Techmakers x FCA Creators Hub',
   defaultName: 'Your Name',
@@ -33,7 +42,7 @@ export function buildCustomRoleConfig(label: string): RoleConfig {
     ...teamRoleTemplate,
     pillLabel: truncatePill(trimmed.toUpperCase()),
     headline1: `${trimmed} at`,
-    headline2: "Builders' Lab 2.0",
+    headline2: TEAM_HEADLINE2,
   }
 }
 
@@ -64,16 +73,25 @@ export function truncatePill(label: string, max = 22): string {
 }
 
 /**
- * Scale headline1 when the typed role makes "<Role> at" long, so it still
- * fits the 952px slot without colliding with the photo.
+ * Starting (max) size for headline1 before DOM fit-shrink.
+ * Long typed roles get a lower starting point so fit converges quickly.
  */
 export function scaledHeadline1Size(text: string, base: number): number {
   const len = text.trim().length
-  if (len <= 14) return base
-  if (len <= 18) return Math.round(base * 0.88)
-  if (len <= 24) return Math.round(base * 0.74)
-  if (len <= 32) return Math.round(base * 0.62)
-  return Math.round(base * 0.52)
+  if (len <= 12) return base
+  if (len <= 16) return Math.round(base * 0.9)
+  if (len <= 20) return Math.round(base * 0.78)
+  if (len <= 26) return Math.round(base * 0.66)
+  if (len <= 34) return Math.round(base * 0.54)
+  return Math.round(base * 0.44)
+}
+
+/** Starting size for team headline2 ("IDEEZA Builders' Lab 2.0"). */
+export function scaledHeadline2Size(text: string, base: number): number {
+  const len = text.trim().length
+  if (len <= 18) return base
+  if (len <= 24) return Math.round(base * 0.92)
+  return Math.round(base * 0.82)
 }
 
 export function scaledPillFontSize(label: string, base: number): number {
