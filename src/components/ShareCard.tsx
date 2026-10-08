@@ -50,8 +50,12 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
     }
   }, [layout.waitlistUrl])
 
-  const name = state.name.trim() || role.defaultName
-  const sub = state.sub.trim() || role.defaultSub
+  const nameEntered = state.name.trim()
+  const subEntered = state.sub.trim()
+  const nameIsPlaceholder = !nameEntered
+  const subIsPlaceholder = !subEntered
+  const name = nameEntered || role.defaultName
+  const sub = subEntered || role.defaultSub
   const hasPhoto = Boolean(state.photoUrl)
   const t = state.photoTransform
 
@@ -287,11 +291,13 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
         <div className="share-card__panel-bar" />
         <div className="share-card__panel-txt">
           <div
-            className="share-card__panel-name"
+            className={`share-card__panel-name${nameIsPlaceholder ? ' is-placeholder' : ''}`}
             style={{
               fontSize: slots.namePanel.name.fontSize,
               fontWeight: slots.namePanel.name.fontWeight,
-              color: slots.namePanel.name.color,
+              color: nameIsPlaceholder
+                ? 'rgba(28, 15, 69, 0.38)'
+                : slots.namePanel.name.color,
               letterSpacing: slots.namePanel.name.letterSpacing,
               lineHeight: slots.namePanel.name.lineHeight,
             }}
@@ -299,11 +305,13 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
             {name}
           </div>
           <div
-            className="share-card__panel-sub"
+            className={`share-card__panel-sub${subIsPlaceholder ? ' is-placeholder' : ''}`}
             style={{
               fontSize: slots.namePanel.sub.fontSize,
               fontWeight: slots.namePanel.sub.fontWeight,
-              color: slots.namePanel.sub.color,
+              color: subIsPlaceholder
+                ? 'rgba(74, 58, 122, 0.45)'
+                : slots.namePanel.sub.color,
               lineHeight: slots.namePanel.sub.lineHeight,
             }}
           >
