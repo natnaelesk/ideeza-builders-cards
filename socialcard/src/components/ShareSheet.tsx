@@ -178,7 +178,7 @@ export function ShareSheet({
               src={imageDataUrl}
               alt={copy.imageAlt}
               width={1080}
-              height={1350}
+              height={1440}
               draggable
             />
             <figcaption className="share-sheet__img-hint">

@@ -1,0 +1,55 @@
+{
+  "canvas": {
+    "width": 1080,
+    "height": 1440
+  },
+  "tiltDegClockwise": 5.673,
+  "photoWindow": {
+    "center": [
+      542.15,
+      522.03
+    ],
+    "width": 403.1,
+    "height": 380.5,
+    "corners": {
+      "tl": [
+        360.39,
+        312.79
+      ],
+      "tr": [
+        761.51,
+        352.63
+      ],
+      "br": [
+        723.9,
+        731.27
+      ],
+      "bl": [
+        322.78,
+        691.43
+      ]
+    },
+    "backdropRgb": [
+      147,
+      129,
+      138
+    ]
+  },
+  "name": {
+    "center": [
+      540,
+      760
+    ],
+    "maxWidth": 520,
+    "fontSize": 64
+  },
+  "eventLine": {
+    "center": [
+      560,
+      888
+    ],
+    "maxWidth": 480,
+    "fontSize": 22
+  },
+  "dates": "Nov 20\u201322"
+}

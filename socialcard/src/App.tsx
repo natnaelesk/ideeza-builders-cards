@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { LinkedInIcon, XIcon } from './components/BrandIcons'
 import { ShareCard } from './components/ShareCard'
 import { ShareSheet } from './components/ShareSheet'
 import { Toast } from './components/Toast'
-import { cardLayout } from './config/cardLayout'
+import { CARD_HEIGHT, CARD_WIDTH, EVENT_DATES, UNIVERSITY } from './config/event'
 import { modalCopy } from './config/shareText'
 import {
   canShareFiles,
@@ -13,6 +13,7 @@ import {
   shareCardFile,
 } from './lib/exportCard'
 import { waitForFonts } from './lib/fonts'
+import { prepareCoverCutout, revokeCutout } from './lib/removeBackground'
 import type { SocialPlatform } from './lib/socialShare'
 import {
   defaultPhotoTransform,
@@ -21,6 +22,7 @@ import {
   PHOTO_ZOOM_MAX,
   PHOTO_ZOOM_MIN,
   type CardFormState,
+  type CutoutStatus,
   type PhotoTransform,
 } from './types'
 import './App.css'
@@ -40,9 +42,13 @@ function readFileAsDataUrl(file: File): Promise<string> {
 }
 
 export default function App() {
-  const uni = cardLayout.university
   const [name, setName] = useState('')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
+  const [photoKey, setPhotoKey] = useState<string | null>(null)
+  const [cutoutUrl, setCutoutUrl] = useState<string | null>(null)
+  const [cutoutStatus, setCutoutStatus] = useState<CutoutStatus>('idle')
+  const [cutoutProgress, setCutoutProgress] = useState(0)
+  const [cutoutProgressLabel, setCutoutProgressLabel] = useState('')
   const [photoTransform, setPhotoTransform] = useState<PhotoTransform>(
     defaultPhotoTransform,
   )
@@ -54,9 +60,10 @@ export default function App() {
   const [previewScale, setPreviewScale] = useState(1)
   const [shareSupported] = useState(() => canShareFiles())
 
-  const cardRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const previewViewportRef = useRef<HTMLDivElement>(null)
-  const photoInputRef = useRef<HTMLInputElement>(null)
+  const cutoutGen = useRef(0)
+  const sessionId = useId()
 
   useEffect(() => {
     waitForFonts().then(() => setFontsReady(true))
@@ -68,7 +75,7 @@ export default function App() {
     const update = () => {
       const w = el.clientWidth
       if (w <= 0) return
-      setPreviewScale(Math.min(1, w / cardLayout.width))
+      setPreviewScale(Math.min(1, w / CARD_WIDTH))
     }
     update()
     const ro = new ResizeObserver(update)
@@ -76,45 +83,84 @@ export default function App() {
     return () => ro.disconnect()
   }, [])
 
-  const state: CardFormState = {
-    name,
-    photoUrl,
-    photoTransform,
-  }
+  const runCutout = useCallback(async (dataUrl: string, key: string) => {
+    const gen = ++cutoutGen.current
+    setCutoutStatus('preparing')
+    setCutoutProgress(0.01)
+    setCutoutProgressLabel('Preparing cover…')
+    setCutoutUrl(null)
+    setStatus('Preparing cover…')
+    try {
+      const result = await prepareCoverCutout(dataUrl, key, (p) => {
+        if (cutoutGen.current !== gen) return
+        setCutoutProgress(p.ratio)
+        setCutoutProgressLabel(p.label)
+        setStatus(
+          p.ratio < 1
+            ? `Preparing cover… ${Math.round(p.ratio * 100)}%`
+            : 'Cover ready',
+        )
+      })
+      if (cutoutGen.current !== gen) return
+      setCutoutUrl(result.objectUrl)
+      setCutoutStatus('ready')
+      setCutoutProgress(1)
+      setStatus(`Cover ready (${(result.elapsedMs / 1000).toFixed(1)}s)`)
+    } catch (err) {
+      console.warn('Background removal failed — photo fallback', err)
+      if (cutoutGen.current !== gen) return
+      setCutoutUrl(null)
+      setCutoutStatus('fallback')
+      setCutoutProgress(0)
+      setStatus('Using photo overlay (cutout unavailable on this device).')
+    }
+  }, [])
 
   const onPhotoChange = async (file: File | null) => {
+    if (photoKey) revokeCutout(photoKey)
+    cutoutGen.current += 1
     if (!file) {
       setPhotoUrl(null)
+      setPhotoKey(null)
+      setCutoutUrl(null)
+      setCutoutStatus('idle')
+      setCutoutProgress(0)
+      setCutoutProgressLabel('')
+      setStatus(null)
       return
     }
     const dataUrl = await readFileAsDataUrl(file)
+    const key = `${sessionId}:${file.name}:${file.size}:${file.lastModified}`
     setPhotoUrl(dataUrl)
+    setPhotoKey(key)
     setPhotoTransform(defaultPhotoTransform())
+    void runCutout(dataUrl, key)
   }
 
-  const filename = `vibe-builders-${uni.id}-${(name || 'card')
+  const state: CardFormState = {
+    name,
+    photoUrl,
+    cutoutUrl,
+    cutoutStatus,
+    cutoutProgress,
+    cutoutProgressLabel,
+    photoTransform,
+  }
+
+  const filename = `vibe-builders-badge-${(name || 'card')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 40)}.png`
 
   const runExport = useCallback(async () => {
-    if (!cardRef.current) return null
+    if (!canvasRef.current) return null
     setExporting(true)
     setStatus('Rendering card…')
     try {
       await waitForFonts()
-      const images = Array.from(cardRef.current.querySelectorAll('img'))
-      await Promise.all(
-        images.map((img) => {
-          if (img.complete) return Promise.resolve()
-          return new Promise<void>((resolve) => {
-            img.onload = () => resolve()
-            img.onerror = () => resolve()
-          })
-        }),
-      )
-      return await renderCardPng(cardRef.current)
+      await new Promise((r) => requestAnimationFrame(() => r(null)))
+      return await renderCardPng(canvasRef.current)
     } finally {
       setExporting(false)
     }
@@ -125,7 +171,7 @@ export default function App() {
       const dataUrl = await runExport()
       if (!dataUrl) return
       downloadDataUrl(dataUrl, filename)
-      setStatus('Downloaded PNG (1080×1350).')
+      setStatus('Downloaded PNG (1080×1440).')
     } catch (err) {
       console.error(err)
       setStatus('Export failed. Try again or use another browser.')
@@ -137,11 +183,12 @@ export default function App() {
       const dataUrl = await runExport()
       if (!dataUrl) return
       const file = await dataUrlToFile(dataUrl, filename)
-      const title = `My Vibe Builders card — ${uni.name}`
-      const shared = await shareCardFile(file, title)
-      if (shared) {
-        setStatus('Shared!')
-      } else {
+      const shared = await shareCardFile(
+        file,
+        `My Vibe Builders badge — ${UNIVERSITY}`,
+      )
+      if (shared) setStatus('Shared!')
+      else {
         downloadDataUrl(dataUrl, filename)
         setStatus('Share not available — downloaded instead.')
       }
@@ -173,18 +220,17 @@ export default function App() {
     }
   }
 
+  const preparing = cutoutStatus === 'preparing'
+  const busy = exporting || preparing
+
   return (
     <div className="app">
       <header className="app__header">
-        <img
-          className="app__brand"
-          src={cardLayout.logos.ideeza}
-          alt="IDEEZA"
-        />
+        <img className="app__brand" src="/logos/logo_ideeza.png" alt="IDEEZA" />
         <div>
           <h1>Vibe Builders National Tour</h1>
           <p>
-            {uni.name} · {uni.dates} · share card
+            {UNIVERSITY} · {EVENT_DATES} · Builder ID badge
           </p>
         </div>
       </header>
@@ -211,7 +257,6 @@ export default function App() {
           <label className="field">
             <span>Your photo</span>
             <input
-              ref={photoInputRef}
               type="file"
               accept="image/*"
               onChange={(e) => {
@@ -219,6 +264,27 @@ export default function App() {
               }}
             />
           </label>
+
+          {preparing && (
+            <div className="app__prepare" role="status" aria-live="polite">
+              <div className="app__prepare-bar">
+                <div
+                  className="app__prepare-fill"
+                  style={{ width: `${Math.max(4, cutoutProgress * 100)}%` }}
+                />
+              </div>
+              <p>
+                {cutoutProgressLabel || 'Preparing cover…'}
+                {cutoutProgress > 0 && cutoutProgress < 1
+                  ? ` · ${Math.round(cutoutProgress * 100)}%`
+                  : ''}
+              </p>
+              <p className="app__prepare-hint">
+                First run downloads the AI model (~188 MB) once, then stays on
+                your device. Nothing is uploaded.
+              </p>
+            </div>
+          )}
 
           {photoUrl && (
             <fieldset className="field field--adjust">
@@ -285,14 +351,14 @@ export default function App() {
             <button
               type="submit"
               className="btn btn--primary"
-              disabled={exporting || !fontsReady}
+              disabled={busy || !fontsReady}
             >
               {exporting ? 'Rendering…' : 'Download PNG'}
             </button>
             <button
               type="button"
               className="btn btn--linkedin"
-              disabled={exporting || !fontsReady}
+              disabled={busy || !fontsReady}
               onClick={() => void onSocialShare('linkedin')}
             >
               <LinkedInIcon />
@@ -301,7 +367,7 @@ export default function App() {
             <button
               type="button"
               className="btn btn--x"
-              disabled={exporting || !fontsReady}
+              disabled={busy || !fontsReady}
               onClick={() => void onSocialShare('x')}
             >
               <XIcon />
@@ -311,7 +377,7 @@ export default function App() {
               <button
                 type="button"
                 className="btn btn--secondary"
-                disabled={exporting || !fontsReady}
+                disabled={busy || !fontsReady}
                 onClick={() => void onShare()}
               >
                 Share
@@ -321,9 +387,8 @@ export default function App() {
 
           {status && <p className="app__status">{status}</p>}
           <p className="app__hint">
-            Nothing is uploaded or stored — everything stays on your device.
-            Export is a crisp 1080×1350 PNG. LinkedIn / X open a share sheet with
-            your card image and ready-made post text.
+            Badge is the approved template with on-device background removal
+            (full <code>isnet</code>). Export is 1080×1440 PNG.
           </p>
         </form>
 
@@ -332,20 +397,32 @@ export default function App() {
           <div
             className="app__preview-viewport"
             ref={previewViewportRef}
-            style={{
-              height: cardLayout.height * previewScale,
-            }}
+            style={{ height: CARD_HEIGHT * previewScale }}
           >
             <div
               className="app__preview-scale"
               style={{
-                width: cardLayout.width,
-                height: cardLayout.height,
+                width: CARD_WIDTH,
+                height: CARD_HEIGHT,
                 transform: `scale(${previewScale})`,
               }}
             >
-              <ShareCard state={state} cardRef={cardRef} />
+              <ShareCard state={state} canvasRef={canvasRef} />
             </div>
+            {preparing && (
+              <div className="app__preview-overlay">
+                <div className="app__preview-overlay-card">
+                  <div className="app__prepare-bar">
+                    <div
+                      className="app__prepare-fill"
+                      style={{ width: `${Math.max(4, cutoutProgress * 100)}%` }}
+                    />
+                  </div>
+                  <strong>Preparing cover…</strong>
+                  <span>{cutoutProgressLabel}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

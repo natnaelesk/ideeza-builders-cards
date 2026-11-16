@@ -1,64 +1,52 @@
-# IDEEZA Vibe Builders National Tour — Share Cards
+# IDEEZA Vibe Builders National Tour — Builder ID Badge
 
-Mobile-first **hero-portrait** share-card generator for the **Vibe Builders National Tour**  
-(**Wolkite University · Nov 20–22** · IDEEZA × Cheche Impact × Zemenay Tech × INSA).
+Mobile-first share-card generator. The approved **final-badge-v2** artwork
+(1080×1440) is the template; the app composites the user’s cutout photo, name,
+and university line on a `<canvas>` at the measured badge tilt (**5.673°**
+clockwise).
 
-Enter your name, upload a photo (optional pan/zoom), preview live, then download a crisp **1080×1350 PNG**. LinkedIn and X open a share sheet with the rendered card and ready-made post text (X posts stay under 280 characters).
+University is a single switch in `src/config/event.ts`:
 
-Everything runs client-side. Nothing is uploaded or stored.
-
-University name, dates, and gate photo live in `src/config/cardLayout.ts` so a future campus can be a config + asset swap.
-
-Deploy as a **separate Vercel project** with **Root Directory = `socialcard`** (domain: socialcard.natnaelesk.com). This folder is independent of the Builders' Lab cards app at the repo root.
+```ts
+export const UNIVERSITY = 'Wolkite University'
+```
 
 ## Quick start
 
 ```bash
 cd socialcard
 npm install
+python3 scripts/make-template.py
 npm run dev
 ```
 
-Production build:
-
 ```bash
-npm run build
-npm run preview
-```
-
-Share-text length tests (X 280-char guard):
-
-```bash
+npm run build && npm run preview
 npm run test:share
 ```
 
-## Card layout (Option A)
+## How the card is built
 
-Top → bottom:
+1. `scripts/make-template.py` clears the sample photo, name, and event-line text
+   from `public/template/final-badge-v2-source.png` and writes
+   `public/template/badge-template.png` + `badge-geometry.json`.
+2. The app draws the template, then three tilted layers:
+   - cutout photo clipped to the rounded photo window
+   - name (Anton condensed, white + soft shadow)
+   - `${UNIVERSITY} · Nov 20–22`
+3. Download exports the canvas as PNG 1080×1440.
 
-1. IDEEZA | Cheche Impact logos  
-2. `// VIBE BUILDERS NATIONAL TOUR` pill  
-3. Soft Wolkite gate backdrop + large circular portrait (~55% width) with purple gradient ring  
-4. Name (huge bold italic uppercase)  
-5. “I'm a Vibe Builder”  
-6. Outlined pill: Vibe Builders Hackathon · Wolkite University · Nov 20–22  
-7. **50,000 birr Prize**  
-8. Partner logos: Cheche Impact, Zemenay Tech, INSA  
+## Background removal
 
-## How to swap artwork (designers)
-
-1. Replace files in `public/campus/` and `public/logos/` (same filenames).
-2. Open **`src/config/cardLayout.ts`** — university block + logo paths + slot coordinates.
-3. All positions are in the native **1080×1350** space.
-
-Spelling is always **Cheche** (never CheChe).
-
-## Share copy
-
-Post templates live in `src/config/shareText.ts`. Every post mentions Wolkite University, the Vibe Builders Hackathon, IDEEZA and Cheche, the prize, and `https://luma.com/lj4evitk`.
+`@imgly/background-removal` with full-quality **`isnet`** (~176 MB model +
+~12 MB WASM on first download from IMG.LY CDN). Lazy-loaded after photo upload,
+with progress UI and soft alpha matte. Fallback: original photo in the window.
 
 ## Stack
 
 - Vite + React + TypeScript
-- Montserrat Black/ExtraBold Italic (bundled in `public/fonts/`) + Poppins
-- `html-to-image` for PNG export
+- Anton + Poppins (bundled)
+- `@imgly/background-removal` + `onnxruntime-web`
+- Canvas export (no html-to-image)
+
+Spelling is always **Cheche**. Register link: `https://luma.com/lj4evitk`.

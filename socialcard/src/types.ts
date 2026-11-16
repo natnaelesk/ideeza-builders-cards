@@ -1,30 +1,25 @@
-/**
- * Photo pan/zoom inside the circular portrait slot.
- *
- * x/y are pan offsets in the −50…50 range (percent of the slot).
- * Positive x pans toward the right edge of the source.
- * Positive y pans toward the top of the source (so max y reveals the head).
- *
- * Maps to CSS `object-position` / `transform-origin` — NOT translate —
- * so `object-fit: cover` keeps the slot filled while panning.
- */
 export interface PhotoTransform {
   x: number
   y: number
-  /** Zoom multiplier (1 … 2.5) */
   zoom: number
 }
+
+export type CutoutStatus = 'idle' | 'preparing' | 'ready' | 'fallback'
 
 export interface CardFormState {
   name: string
   photoUrl: string | null
+  cutoutUrl: string | null
+  cutoutStatus: CutoutStatus
+  cutoutProgress: number
+  cutoutProgressLabel: string
   photoTransform: PhotoTransform
 }
 
 export const defaultPhotoTransform = (): PhotoTransform => ({
   x: 0,
-  y: 0,
-  zoom: 1.15,
+  y: 6,
+  zoom: 1.08,
 })
 
 export const PHOTO_PAN_MIN = -50

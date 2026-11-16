@@ -2,7 +2,7 @@
  * Length guard for X posts — run with: npm run test:share
  */
 import assert from 'node:assert/strict'
-import { cardLayout } from './cardLayout'
+import { EVENT_DATES, UNIVERSITY } from './event'
 import {
   buildLinkedInPost,
   buildXPost,
@@ -12,7 +12,7 @@ import {
   type ShareFields,
 } from './shareText'
 
-const university = cardLayout.university.name
+const university = UNIVERSITY
 
 function check(fields: ShareFields, label: string) {
   const post = buildXPost(fields)
@@ -49,7 +49,7 @@ check(
   {
     name: 'Nati',
     universityName: university,
-    universityDates: cardLayout.university.dates,
+    universityDates: EVENT_DATES,
   },
   'university-override',
 )

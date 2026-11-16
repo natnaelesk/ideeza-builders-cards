@@ -1,33 +1,9 @@
-import { toPng } from 'html-to-image'
-import { CARD_HEIGHT, CARD_WIDTH } from '../config/cardLayout'
-import { waitForFonts } from './fonts'
+import { canvasToPngDataUrl } from './drawBadge'
 
-export async function renderCardPng(node: HTMLElement): Promise<string> {
-  await waitForFonts()
-  await toPng(node, {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
-    pixelRatio: 1,
-    cacheBust: true,
-    style: {
-      transform: 'none',
-      transformOrigin: 'top left',
-      left: '0',
-      top: '0',
-    },
-  })
-  return toPng(node, {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
-    pixelRatio: 1,
-    cacheBust: true,
-    style: {
-      transform: 'none',
-      transformOrigin: 'top left',
-      left: '0',
-      top: '0',
-    },
-  })
+export async function renderCardPng(canvas: HTMLCanvasElement): Promise<string> {
+  // Ensure fonts are painted
+  if (document.fonts?.ready) await document.fonts.ready
+  return canvasToPngDataUrl(canvas)
 }
 
 export function downloadDataUrl(dataUrl: string, filename: string) {
