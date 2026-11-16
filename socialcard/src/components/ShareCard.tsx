@@ -42,15 +42,11 @@ export function ShareCard({ state, canvasRef, className }: ShareCardProps) {
 
   useEffect(() => {
     let cancelled = false
-    const src =
-      state.cutoutStatus === 'ready' && state.cutoutUrl
-        ? state.cutoutUrl
-        : state.photoUrl
-    if (!src) {
+    if (!state.photoUrl) {
       photoRef.current = null
       return
     }
-    loadImage(src)
+    loadImage(state.photoUrl)
       .then((img) => {
         if (!cancelled) photoRef.current = img
       })
@@ -60,7 +56,7 @@ export function ShareCard({ state, canvasRef, className }: ShareCardProps) {
     return () => {
       cancelled = true
     }
-  }, [state.photoUrl, state.cutoutUrl, state.cutoutStatus])
+  }, [state.photoUrl])
 
   useEffect(() => {
     const canvas = localRef.current
@@ -68,12 +64,8 @@ export function ShareCard({ state, canvasRef, className }: ShareCardProps) {
     if (!canvas || !template) return
     let cancelled = false
     const run = async () => {
-      if (
-        (state.cutoutUrl || state.photoUrl) &&
-        !photoRef.current &&
-        state.cutoutStatus !== 'idle'
-      ) {
-        await new Promise((r) => setTimeout(r, 80))
+      if (state.photoUrl && !photoRef.current) {
+        await new Promise((r) => setTimeout(r, 40))
       }
       if (cancelled || !localRef.current || !templateRef.current) return
       await paintBadge(

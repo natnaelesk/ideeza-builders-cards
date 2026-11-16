@@ -1,8 +1,8 @@
 # IDEEZA Vibe Builders National Tour — Builder ID Badge
 
 Mobile-first share-card generator. The approved **final-badge-v2** artwork
-(1080×1440) is the template; the app composites the user’s cutout photo, name,
-and university line on a `<canvas>` at the measured badge tilt (**5.673°**
+(1080×1440) is the template; the app composites the user’s photo, name, and
+university line on a `<canvas>` at the measured badge tilt (**5.673°**
 clockwise).
 
 University is a single switch in `src/config/event.ts`:
@@ -31,22 +31,22 @@ npm run test:share
    from `public/template/final-badge-v2-source.png` and writes
    `public/template/badge-template.png` + `badge-geometry.json`.
 2. The app draws the template, then three tilted layers:
-   - cutout photo clipped to the rounded photo window
-   - name (Anton condensed, white + soft shadow)
+   - uploaded photo clipped to the rounded photo window (`object-fit: cover`,
+     FaceDetector centering when available, otherwise a slight upward bias)
+   - name (Anton condensed, white + soft glow)
    - `${UNIVERSITY} · Nov 20–22`
 3. Download exports the canvas as PNG 1080×1440.
 
-## Background removal
+## Mobile layout
 
-`@imgly/background-removal` with full-quality **`isnet`** (~176 MB model +
-~12 MB WASM on first download from IMG.LY CDN). Lazy-loaded after photo upload,
-with progress UI and soft alpha matte. Fallback: original photo in the window.
+On phones the card fills the viewport. Controls live in a compact bottom sheet
+(name, Pick photo, Download, Share) so the preview stays visible while typing —
+including when the iOS keyboard is open (visualViewport inset).
 
 ## Stack
 
 - Vite + React + TypeScript
 - Anton + Poppins (bundled)
-- `@imgly/background-removal` + `onnxruntime-web`
-- Canvas export (no html-to-image)
+- Canvas export
 
 Spelling is always **Cheche**. Register link: `https://luma.com/lj4evitk`.
