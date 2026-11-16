@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { LinkedInIcon, XIcon } from './components/BrandIcons'
 import { ShareCard } from './components/ShareCard'
 import { ShareSheet } from './components/ShareSheet'
@@ -12,8 +12,8 @@ import {
   renderCardPng,
   shareCardFile,
 } from './lib/exportCard'
+import { focusTransformForPhoto } from './lib/faceFocus'
 import { waitForFonts } from './lib/fonts'
-import { prepareCoverCutout, revokeCutout } from './lib/removeBackground'
 import type { SocialPlatform } from './lib/socialShare'
 import {
   defaultPhotoTransform,
@@ -22,7 +22,6 @@ import {
   PHOTO_ZOOM_MAX,
   PHOTO_ZOOM_MIN,
   type CardFormState,
-  type CutoutStatus,
   type PhotoTransform,
 } from './types'
 import './App.css'
@@ -44,11 +43,6 @@ function readFileAsDataUrl(file: File): Promise<string> {
 export default function App() {
   const [name, setName] = useState('')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
-  const [photoKey, setPhotoKey] = useState<string | null>(null)
-  const [cutoutUrl, setCutoutUrl] = useState<string | null>(null)
-  const [cutoutStatus, setCutoutStatus] = useState<CutoutStatus>('idle')
-  const [cutoutProgress, setCutoutProgress] = useState(0)
-  const [cutoutProgressLabel, setCutoutProgressLabel] = useState('')
   const [photoTransform, setPhotoTransform] = useState<PhotoTransform>(
     defaultPhotoTransform,
   )
@@ -59,91 +53,68 @@ export default function App() {
   const [shareSheet, setShareSheet] = useState<ShareSheetState | null>(null)
   const [previewScale, setPreviewScale] = useState(1)
   const [shareSupported] = useState(() => canShareFiles())
+  const [vvBottom, setVvBottom] = useState(0)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const previewViewportRef = useRef<HTMLDivElement>(null)
-  const cutoutGen = useRef(0)
-  const sessionId = useId()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const sheetRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     waitForFonts().then(() => setFontsReady(true))
   }, [])
 
+  // Track visual viewport so the iOS keyboard shrinks the preview, not covers it
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const sync = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      setVvBottom(inset)
+    }
+    sync()
+    vv.addEventListener('resize', sync)
+    vv.addEventListener('scroll', sync)
+    return () => {
+      vv.removeEventListener('resize', sync)
+      vv.removeEventListener('scroll', sync)
+    }
+  }, [])
+
+  // Scale preview to fill available space above the sheet
   useEffect(() => {
     const el = previewViewportRef.current
+    const sheet = sheetRef.current
     if (!el) return
     const update = () => {
       const w = el.clientWidth
-      if (w <= 0) return
-      setPreviewScale(Math.min(1, w / CARD_WIDTH))
+      const h = el.clientHeight
+      if (w <= 0 || h <= 0) return
+      const scale = Math.min(w / CARD_WIDTH, h / CARD_HEIGHT)
+      setPreviewScale(Math.max(0.2, Math.min(1, scale)))
     }
     update()
     const ro = new ResizeObserver(update)
     ro.observe(el)
+    if (sheet) ro.observe(sheet)
     return () => ro.disconnect()
-  }, [])
-
-  const runCutout = useCallback(async (dataUrl: string, key: string) => {
-    const gen = ++cutoutGen.current
-    setCutoutStatus('preparing')
-    setCutoutProgress(0.01)
-    setCutoutProgressLabel('Preparing cover…')
-    setCutoutUrl(null)
-    setStatus('Preparing cover…')
-    try {
-      const result = await prepareCoverCutout(dataUrl, key, (p) => {
-        if (cutoutGen.current !== gen) return
-        setCutoutProgress(p.ratio)
-        setCutoutProgressLabel(p.label)
-        setStatus(
-          p.ratio < 1
-            ? `Preparing cover… ${Math.round(p.ratio * 100)}%`
-            : 'Cover ready',
-        )
-      })
-      if (cutoutGen.current !== gen) return
-      setCutoutUrl(result.objectUrl)
-      setCutoutStatus('ready')
-      setCutoutProgress(1)
-      setStatus(`Cover ready (${(result.elapsedMs / 1000).toFixed(1)}s)`)
-    } catch (err) {
-      console.warn('Background removal failed — photo fallback', err)
-      if (cutoutGen.current !== gen) return
-      setCutoutUrl(null)
-      setCutoutStatus('fallback')
-      setCutoutProgress(0)
-      setStatus('Using photo overlay (cutout unavailable on this device).')
-    }
-  }, [])
+  }, [vvBottom])
 
   const onPhotoChange = async (file: File | null) => {
-    if (photoKey) revokeCutout(photoKey)
-    cutoutGen.current += 1
     if (!file) {
       setPhotoUrl(null)
-      setPhotoKey(null)
-      setCutoutUrl(null)
-      setCutoutStatus('idle')
-      setCutoutProgress(0)
-      setCutoutProgressLabel('')
-      setStatus(null)
+      setPhotoTransform(defaultPhotoTransform())
       return
     }
     const dataUrl = await readFileAsDataUrl(file)
-    const key = `${sessionId}:${file.name}:${file.size}:${file.lastModified}`
     setPhotoUrl(dataUrl)
-    setPhotoKey(key)
-    setPhotoTransform(defaultPhotoTransform())
-    void runCutout(dataUrl, key)
+    const focus = await focusTransformForPhoto(dataUrl)
+    setPhotoTransform(focus)
   }
 
   const state: CardFormState = {
     name,
     photoUrl,
-    cutoutUrl,
-    cutoutStatus,
-    cutoutProgress,
-    cutoutProgressLabel,
     photoTransform,
   }
 
@@ -220,11 +191,13 @@ export default function App() {
     }
   }
 
-  const preparing = cutoutStatus === 'preparing'
-  const busy = exporting || preparing
+  const busy = exporting
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      style={{ ['--vv-bottom' as string]: `${vvBottom}px` }}
+    >
       <header className="app__header">
         <img className="app__brand" src="/logos/logo_ideeza.png" alt="IDEEZA" />
         <div>
@@ -236,194 +209,162 @@ export default function App() {
       </header>
 
       <div className="app__layout">
-        <form
-          className="app__form"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void onDownload()
-          }}
-        >
-          <label className="field">
-            <span>Your name</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Hana Tadesse"
-              autoComplete="name"
-              maxLength={48}
-            />
-          </label>
+        <div className="app__preview">
+          <div className="app__preview-label">Live preview</div>
+          <div className="app__preview-viewport" ref={previewViewportRef}>
+            <div
+              className="app__preview-scale"
+              style={{
+                width: CARD_WIDTH,
+                height: CARD_HEIGHT,
+                ['--preview-scale' as string]: String(previewScale),
+              }}
+            >
+              <ShareCard state={state} canvasRef={canvasRef} />
+            </div>
+          </div>
+        </div>
 
-          <label className="field">
-            <span>Your photo</span>
+        <div className="app__sheet" ref={sheetRef}>
+          <form
+            className="app__form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void onDownload()
+            }}
+          >
+            <label className="field">
+              <span>Your name</span>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Hana Tadesse"
+                autoComplete="name"
+                maxLength={48}
+                enterKeyHint="done"
+              />
+            </label>
+
             <input
+              ref={fileInputRef}
+              className="app__file-input"
               type="file"
               accept="image/*"
               onChange={(e) => {
                 void onPhotoChange(e.target.files?.[0] ?? null)
               }}
             />
-          </label>
 
-          {preparing && (
-            <div className="app__prepare" role="status" aria-live="polite">
-              <div className="app__prepare-bar">
-                <div
-                  className="app__prepare-fill"
-                  style={{ width: `${Math.max(4, cutoutProgress * 100)}%` }}
-                />
-              </div>
-              <p>
-                {cutoutProgressLabel || 'Preparing cover…'}
-                {cutoutProgress > 0 && cutoutProgress < 1
-                  ? ` · ${Math.round(cutoutProgress * 100)}%`
-                  : ''}
-              </p>
-              <p className="app__prepare-hint">
-                First run downloads the AI model (~188 MB) once, then stays on
-                your device. Nothing is uploaded.
-              </p>
-            </div>
-          )}
-
-          {photoUrl && (
-            <fieldset className="field field--adjust">
-              <legend>Adjust photo</legend>
-              <label>
-                Zoom
-                <input
-                  type="range"
-                  min={PHOTO_ZOOM_MIN}
-                  max={PHOTO_ZOOM_MAX}
-                  step={0.01}
-                  value={photoTransform.zoom}
-                  onChange={(e) =>
-                    setPhotoTransform((t) => ({
-                      ...t,
-                      zoom: Number(e.target.value),
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Move left / right
-                <input
-                  type="range"
-                  min={PHOTO_PAN_MIN}
-                  max={PHOTO_PAN_MAX}
-                  step={1}
-                  value={photoTransform.x}
-                  onChange={(e) =>
-                    setPhotoTransform((t) => ({
-                      ...t,
-                      x: Number(e.target.value),
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Move up / down
-                <input
-                  type="range"
-                  min={PHOTO_PAN_MIN}
-                  max={PHOTO_PAN_MAX}
-                  step={1}
-                  value={photoTransform.y}
-                  onChange={(e) =>
-                    setPhotoTransform((t) => ({
-                      ...t,
-                      y: Number(e.target.value),
-                    }))
-                  }
-                />
-              </label>
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => setPhotoTransform(defaultPhotoTransform())}
-              >
-                Reset crop
-              </button>
-            </fieldset>
-          )}
-
-          <div className="app__actions">
-            <button
-              type="submit"
-              className="btn btn--primary"
-              disabled={busy || !fontsReady}
-            >
-              {exporting ? 'Rendering…' : 'Download PNG'}
-            </button>
             <button
               type="button"
-              className="btn btn--linkedin"
-              disabled={busy || !fontsReady}
-              onClick={() => void onSocialShare('linkedin')}
+              className="btn btn--secondary"
+              onClick={() => fileInputRef.current?.click()}
             >
-              <LinkedInIcon />
-              <span>Share on LinkedIn</span>
+              {photoUrl ? 'Change photo' : 'Pick photo'}
             </button>
-            <button
-              type="button"
-              className="btn btn--x"
-              disabled={busy || !fontsReady}
-              onClick={() => void onSocialShare('x')}
-            >
-              <XIcon />
-              <span>Share on X</span>
-            </button>
-            {shareSupported && (
+
+            {/* Desktop-only crop adjust — kept off the compact mobile sheet */}
+            {photoUrl && (
+              <fieldset className="field field--adjust app__adjust-desktop">
+                <legend>Adjust photo</legend>
+                <label>
+                  Zoom
+                  <input
+                    type="range"
+                    min={PHOTO_ZOOM_MIN}
+                    max={PHOTO_ZOOM_MAX}
+                    step={0.01}
+                    value={photoTransform.zoom}
+                    onChange={(e) =>
+                      setPhotoTransform((t) => ({
+                        ...t,
+                        zoom: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  Move left / right
+                  <input
+                    type="range"
+                    min={PHOTO_PAN_MIN}
+                    max={PHOTO_PAN_MAX}
+                    step={1}
+                    value={photoTransform.x}
+                    onChange={(e) =>
+                      setPhotoTransform((t) => ({
+                        ...t,
+                        x: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  Move up / down
+                  <input
+                    type="range"
+                    min={PHOTO_PAN_MIN}
+                    max={PHOTO_PAN_MAX}
+                    step={1}
+                    value={photoTransform.y}
+                    onChange={(e) =>
+                      setPhotoTransform((t) => ({
+                        ...t,
+                        y: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => setPhotoTransform(defaultPhotoTransform())}
+                >
+                  Reset crop
+                </button>
+              </fieldset>
+            )}
+
+            <div className="app__actions">
               <button
-                type="button"
-                className="btn btn--secondary"
+                type="submit"
+                className="btn btn--primary"
                 disabled={busy || !fontsReady}
-                onClick={() => void onShare()}
               >
-                Share
+                {exporting ? 'Rendering…' : 'Download PNG'}
               </button>
-            )}
-          </div>
-
-          {status && <p className="app__status">{status}</p>}
-          <p className="app__hint">
-            Badge is the approved template with on-device background removal
-            (full <code>isnet</code>). Export is 1080×1440 PNG.
-          </p>
-        </form>
-
-        <div className="app__preview">
-          <div className="app__preview-label">Live preview</div>
-          <div
-            className="app__preview-viewport"
-            ref={previewViewportRef}
-            style={{ height: CARD_HEIGHT * previewScale }}
-          >
-            <div
-              className="app__preview-scale"
-              style={{
-                width: CARD_WIDTH,
-                height: CARD_HEIGHT,
-                transform: `scale(${previewScale})`,
-              }}
-            >
-              <ShareCard state={state} canvasRef={canvasRef} />
+              <button
+                type="button"
+                className="btn btn--linkedin"
+                disabled={busy || !fontsReady}
+                onClick={() => void onSocialShare('linkedin')}
+              >
+                <LinkedInIcon />
+                <span>Share</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn--x"
+                disabled={busy || !fontsReady}
+                onClick={() => void onSocialShare('x')}
+              >
+                <XIcon />
+                <span>X</span>
+              </button>
+              {shareSupported && (
+                <button
+                  type="button"
+                  className="btn btn--ghost app__share-native"
+                  disabled={busy || !fontsReady}
+                  onClick={() => void onShare()}
+                >
+                  Share…
+                </button>
+              )}
             </div>
-            {preparing && (
-              <div className="app__preview-overlay">
-                <div className="app__preview-overlay-card">
-                  <div className="app__prepare-bar">
-                    <div
-                      className="app__prepare-fill"
-                      style={{ width: `${Math.max(4, cutoutProgress * 100)}%` }}
-                    />
-                  </div>
-                  <strong>Preparing cover…</strong>
-                  <span>{cutoutProgressLabel}</span>
-                </div>
-              </div>
-            )}
-          </div>
+
+            {status && <p className="app__status">{status}</p>}
+          </form>
         </div>
       </div>
 

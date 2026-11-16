@@ -4,22 +4,17 @@ export interface PhotoTransform {
   zoom: number
 }
 
-export type CutoutStatus = 'idle' | 'preparing' | 'ready' | 'fallback'
-
 export interface CardFormState {
   name: string
   photoUrl: string | null
-  cutoutUrl: string | null
-  cutoutStatus: CutoutStatus
-  cutoutProgress: number
-  cutoutProgressLabel: string
   photoTransform: PhotoTransform
 }
 
+/** Default: slight upward bias so faces sit higher in the window. */
 export const defaultPhotoTransform = (): PhotoTransform => ({
   x: 0,
-  y: 6,
-  zoom: 1.08,
+  y: 10,
+  zoom: 1.05,
 })
 
 export const PHOTO_PAN_MIN = -50

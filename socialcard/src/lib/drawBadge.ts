@@ -28,37 +28,10 @@ function roundRectPath(
   ctx.closePath()
 }
 
-/** Alpha bbox of a cutout image (headroom above top of head). */
-function alphaBBox(
-  img: HTMLImageElement | ImageBitmap,
-): { x: number; y: number; w: number; h: number } | null {
-  const c = document.createElement('canvas')
-  c.width = img.width
-  c.height = img.height
-  const ctx = c.getContext('2d', { willReadFrequently: true })
-  if (!ctx) return null
-  ctx.drawImage(img, 0, 0)
-  const data = ctx.getImageData(0, 0, c.width, c.height).data
-  let minX = c.width,
-    minY = c.height,
-    maxX = 0,
-    maxY = 0
-  let found = false
-  for (let y = 0; y < c.height; y++) {
-    for (let x = 0; x < c.width; x++) {
-      if (data[(y * c.width + x) * 4 + 3] > 24) {
-        found = true
-        if (x < minX) minX = x
-        if (y < minY) minY = y
-        if (x > maxX) maxX = x
-        if (y > maxY) maxY = y
-      }
-    }
-  }
-  if (!found) return null
-  return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 }
-}
-
+/**
+ * Draw the uploaded photo with object-fit: cover math, clipped to the
+ * tilted rounded photo window. Transform pans/zooms around cover center.
+ */
 function drawPhotoLayer(
   ctx: CanvasRenderingContext2D,
   state: CardFormState,
@@ -72,44 +45,21 @@ function drawPhotoLayer(
   ctx.translate(cx, cy)
   ctx.rotate(RAD)
 
-  // Clip to rounded photo window (local space, centered)
   roundRectPath(ctx, -width / 2, -height / 2, width, height, radius)
   ctx.clip()
 
   if (photoImg) {
-    const bbox = alphaBBox(photoImg as HTMLImageElement)
-    // Source crop: prefer alpha bbox (face+upper body) with headroom
-    let sx = 0,
-      sy = 0,
-      sw = photoImg.width,
-      sh = photoImg.height
-    if (bbox) {
-      const headroom = bbox.h * 0.08
-      sy = Math.max(0, bbox.y - headroom)
-      sx = bbox.x
-      sw = bbox.w
-      sh = Math.min(photoImg.height - sy, bbox.h + headroom * 1.2)
-    }
-
-    // Cover-fit into window with pan/zoom
+    const sw = photoImg.width
+    const sh = photoImg.height
+    // object-fit: cover
     const scale0 = Math.max(width / sw, height / sh) * t.zoom
     const dw = sw * scale0
     const dh = sh * scale0
     const ox = (t.x / 50) * (dw - width) * 0.5
     const oy = (-t.y / 50) * (dh - height) * 0.5
-    ctx.drawImage(
-      photoImg,
-      sx,
-      sy,
-      sw,
-      sh,
-      -dw / 2 + ox,
-      -dh / 2 + oy,
-      dw,
-      dh,
-    )
+    ctx.drawImage(photoImg, 0, 0, sw, sh, -dw / 2 + ox, -dh / 2 + oy, dw, dh)
   } else {
-    // No-photo fallback: soft silhouette circle + initials
+    // No-photo fallback: soft silhouette + initials
     ctx.fillStyle = '#e6e0ee'
     ctx.fillRect(-width / 2, -height / 2, width, height)
     const initials = (state.name.trim() || '?')
@@ -164,12 +114,10 @@ function drawName(ctx: CanvasRenderingContext2D, name: string) {
   ctx.font = `400 ${size}px Anton, "Arial Narrow", sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  // Soft purple drop shadow (depth)
   ctx.shadowColor = 'rgba(45, 15, 90, 0.38)'
   ctx.shadowBlur = 10
   ctx.shadowOffsetX = 1
   ctx.shadowOffsetY = 3
-  // Slight cool-white + outer glow to match original holo print
   ctx.fillStyle = '#f7f5ff'
   ctx.fillText(label, 0, 0)
   ctx.shadowColor = 'rgba(255, 255, 255, 0.45)'
@@ -191,7 +139,6 @@ function drawEventLine(ctx: CanvasRenderingContext2D) {
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillStyle = '#2a1858'
-  // Shrink if needed
   let size = EVENT_SLOT.fontSize
   while (size > 14 && ctx.measureText(text).width > EVENT_SLOT.maxWidth) {
     size -= 1
@@ -227,17 +174,7 @@ export async function paintBadge(
   ctx.clearRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
   ctx.drawImage(template, 0, 0, CARD_WIDTH, CARD_HEIGHT)
 
-  // Prefer cutout when ready; else original photo (fallback); else silhouette
-  const usePhoto =
-    state.cutoutStatus === 'ready' && state.cutoutUrl
-      ? photoImg
-      : state.cutoutStatus === 'fallback' && state.photoUrl
-        ? photoImg
-        : state.photoUrl && state.cutoutStatus !== 'preparing'
-          ? photoImg
-          : null
-
-  drawPhotoLayer(ctx, state, usePhoto)
+  drawPhotoLayer(ctx, state, photoImg)
   drawName(ctx, state.name)
   drawEventLine(ctx)
 }
