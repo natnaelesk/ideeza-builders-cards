@@ -44,67 +44,6 @@
   font-weight: 500;
 }
 
-.app__days {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 18px;
-}
-
-.app__day {
-  appearance: none;
-  border: 1.5px solid rgba(106, 47, 240, 0.2);
-  background: var(--surface);
-  color: var(--navy);
-  font: inherit;
-  padding: 10px 6px;
-  border-radius: 16px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.15s ease;
-}
-
-.app__day-label {
-  font-weight: 800;
-  font-size: 0.92rem;
-}
-
-.app__day-hint {
-  font-weight: 600;
-  font-size: 0.62rem;
-  line-height: 1.25;
-  color: var(--muted);
-  text-align: center;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 0 2px;
-}
-
-.app__day.is-active {
-  background: linear-gradient(135deg, #2a1170, #6a2ff0);
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 10px 24px rgba(90, 40, 220, 0.28);
-}
-
-.app__day.is-active .app__day-hint {
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.app__day:active {
-  transform: scale(0.98);
-}
-
 .app__layout {
   display: flex;
   flex-direction: column;
@@ -367,9 +306,5 @@
 
   .app__header h1 {
     font-size: 1.4rem;
-  }
-
-  .app__day-hint {
-    white-space: normal;
   }
 }

@@ -1,7 +1,7 @@
 .share-card {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(165deg, #fbfaff 0%, #efe8ff 42%, #f7f2ff 100%);
+  background: linear-gradient(180deg, #fbfaff 0%, #efe8ff 48%, #f7f2ff 100%);
   box-sizing: border-box;
   isolation: isolate;
 }
@@ -22,12 +22,14 @@
 
 .share-card__top-logos,
 .share-card__tour-pill,
-.share-card__headline,
 .share-card__gate,
 .share-card__photo,
-.share-card__dates-prize,
-.share-card__name-panel,
-.share-card__logos {
+.share-card__name,
+.share-card__identity,
+.share-card__event-pill,
+.share-card__prize,
+.share-card__logos,
+.share-card__portrait-swoosh {
   position: absolute;
   z-index: 1;
   box-sizing: border-box;
@@ -78,45 +80,10 @@
   font-size: 1.15em;
 }
 
-.share-card__headline {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 2px;
-}
-
-.share-card__h1 {
-  white-space: nowrap;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.share-card__h2 {
-  white-space: pre-line;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.share-card__uni-block {
-  margin-top: 6px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 1;
-}
-
-.share-card__tagline {
-  margin-top: 6px;
-}
-
-.share-card__kicker {
-  margin-top: 2px;
-}
-
 .share-card__gate {
-  overflow: visible;
   z-index: 1;
+  overflow: visible;
+  pointer-events: none;
 }
 
 .share-card__gate-img {
@@ -124,42 +91,40 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 38%;
-  /* Soft edges baked into PNG alpha for reliable html-to-image export */
+  object-position: center 35%;
+  opacity: 0.72;
+  filter: saturate(0.92) brightness(1.05);
 }
 
-.share-card__gate-fade {
+.share-card__gate-wash {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 42%;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    rgba(243, 238, 255, 0.35) 40%,
-    rgba(243, 238, 255, 0.92) 100%
-  );
-  pointer-events: none;
-}
-
-.share-card__gate-swoosh {
-  position: absolute;
-  left: -2%;
-  right: -2%;
-  bottom: 8%;
-  width: 104%;
-  height: 28%;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 70% 65% at 50% 45%,
+      rgba(243, 238, 255, 0.15) 0%,
+      rgba(243, 238, 255, 0.72) 70%,
+      rgba(243, 238, 255, 0.95) 100%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(251, 250, 255, 0.55) 0%,
+      transparent 18%,
+      transparent 55%,
+      rgba(243, 238, 255, 0.85) 100%
+    );
   pointer-events: none;
 }
 
 .share-card__photo {
+  z-index: 3;
   overflow: hidden;
   border-radius: 50%;
   border-style: solid;
-  border-color: #fff;
-  background: linear-gradient(145deg, #ebe3ff, #d8c8ff);
-  z-index: 3;
+  border-color: transparent;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    linear-gradient(145deg, #d24bff 0%, #6a2ff0 45%, #3a0f9a 100%) border-box;
 }
 
 .share-card__photo-img {
@@ -170,75 +135,70 @@
   will-change: transform, object-position;
 }
 
-.share-card__photo-ph {
+.share-card__photo-silhouette {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.share-card__portrait-swoosh {
+  left: 0;
+  width: 1080px;
+  height: 160px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.share-card__name {
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
-  color: rgba(75, 23, 201, 0.45);
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
-.share-card__dates-prize {
+.share-card__name.is-multiline {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  align-items: unset;
+}
+
+.share-card__name.is-placeholder {
+  font-style: italic;
+}
+
+.share-card__identity {
+  z-index: 5;
   display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
-  gap: 4px;
-  z-index: 2;
+}
+
+.share-card__event-pill {
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-radius: 999px;
+  border: 2px solid rgba(106, 47, 240, 0.35);
+  background: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .share-card__prize {
-  line-height: 1.05;
-}
-
-.share-card__name-panel {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 18px 22px;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1.5px solid rgba(255, 255, 255, 0.95);
-  border-radius: 22px;
-  box-shadow: 0 12px 32px rgba(80, 30, 190, 0.1);
-  backdrop-filter: blur(8px);
-  z-index: 2;
-}
-
-.share-card__panel-icon {
-  flex-shrink: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
-  background: linear-gradient(145deg, #ebe3ff, #dccfff);
-}
-
-.share-card__panel-txt {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: left;
-}
-
-.share-card__name,
-.share-card__project,
-.share-card__pitch {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.share-card__name.is-placeholder,
-.share-card__project.is-placeholder,
-.share-card__pitch.is-placeholder {
-  font-style: italic;
+  text-align: center;
 }
 
 .share-card__logos {
@@ -246,6 +206,7 @@
   align-items: center;
   justify-content: space-evenly;
   gap: 16px;
+  z-index: 5;
   background: transparent;
   border: none;
   padding: 0;
