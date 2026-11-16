@@ -32,10 +32,11 @@ async function loadCard(page, { name = 'Natnael Eskinder', photo = PHOTO } = {})
   await page.locator('input[type="file"]').setInputFiles(photo)
   await page.waitForTimeout(900)
   await page.waitForFunction(() => Boolean(window.__badgeDebug?.getCardCanvas?.()))
-  // Ensure typing/keyboard collapse classes are cleared for normal panel shots
+  // Ensure keyboard collapse class is cleared for normal panel shots
   await page.evaluate(() => {
     document.activeElement?.blur?.()
-    document.querySelector('.app')?.classList.remove('app--typing', 'app--keyboard')
+    document.querySelector('.app')?.classList.remove('app--keyboard')
+    document.querySelector('.app')?.style.setProperty('--vv-bottom', '0px')
   })
   await page.waitForTimeout(200)
 }
@@ -151,11 +152,36 @@ const browser = await chromium.launch({ headless: true })
   await context.close()
 }
 
-// ——— Keyboard / reduced viewport 375×420 ———
-// Emulate the visual viewport height itself (not a huge inset on top of 420).
+// ——— Focused name, NO keyboard (375×812) — panel must stay full ———
 {
   const context = await browser.newContext({
-    viewport: { width: 375, height: 420 },
+    viewport: { width: 375, height: 812 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 2,
+  })
+  const page = await context.newPage()
+  page.setDefaultTimeout(120_000)
+  await loadCard(page, { name: 'Natnael Eskinder' })
+  await page.getByPlaceholder('Hana Tadesse').focus()
+  await page.waitForTimeout(400)
+  // Confirm collapse did NOT trigger (vv shrink ≈ 0)
+  const collapsed = await page.evaluate(
+    () => document.querySelector('.app')?.classList.contains('app--keyboard'),
+  )
+  if (collapsed) throw new Error('panel collapsed without keyboard shrink')
+  await page.screenshot({
+    path: path.join(OUT, 'mobile-375-focused-no-keyboard.png'),
+    fullPage: false,
+  })
+  console.log('saved mobile-375-focused-no-keyboard.png')
+  await context.close()
+}
+
+// ——— Real keyboard: visualViewport shrink > 120px on 375×812 ———
+{
+  const context = await browser.newContext({
+    viewport: { width: 375, height: 812 },
     isMobile: true,
     hasTouch: true,
     deviceScaleFactor: 2,
@@ -164,16 +190,18 @@ const browser = await chromium.launch({ headless: true })
   page.setDefaultTimeout(120_000)
   await loadCard(page, { name: 'Natnael' })
   await page.getByPlaceholder('Hana Tadesse').focus()
-  await page.waitForTimeout(400)
-  await page.evaluate(() => {
-    // Mild keyboard inset within this already-short viewport
-    document.querySelector('.app')?.style.setProperty('--vv-bottom', '0px')
-    document.querySelector('.app')?.classList.add('app--typing', 'app--keyboard')
-  })
-  await page.waitForTimeout(350)
+  // 812 − 420 = 392px shrink (>120) → collapse panel, hug-frame rescales
+  await page.evaluate(() => window.__badgeDebug.setViewportShrink(392))
+  await page.waitForTimeout(500)
+  const collapsed = await page.evaluate(
+    () => document.querySelector('.app')?.classList.contains('app--keyboard'),
+  )
+  if (!collapsed) throw new Error('keyboard collapse did not apply')
+  // Capture the visual viewport only (keyboard occupies the rest)
   await page.screenshot({
     path: path.join(OUT, 'mobile-375-keyboard.png'),
     fullPage: false,
+    clip: { x: 0, y: 0, width: 375, height: 420 },
   })
   console.log('saved mobile-375-keyboard.png')
   await context.close()

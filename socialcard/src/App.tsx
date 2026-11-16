@@ -11,7 +11,6 @@ import { InstagramSheet } from './components/InstagramSheet'
 import { ShareCard } from './components/ShareCard'
 import { ShareSheet } from './components/ShareSheet'
 import { Toast } from './components/Toast'
-import { NAME_SLOT } from './config/badgeGeometry'
 import { CARD_HEIGHT, CARD_WIDTH, EVENT_DATES, UNIVERSITY } from './config/event'
 import { modalCopy } from './config/shareText'
 import {
@@ -93,12 +92,14 @@ export default function App() {
   const [igHint, setIgHint] = useState<string | null>(null)
   const [moreOpen, setMoreOpen] = useState(false)
   const [previewScale, setPreviewScale] = useState(1)
+  const [frameSize, setFrameSize] = useState({ w: 0, h: 0 })
   const [shareSupported] = useState(() => canShareFiles())
   const [vvBottom, setVvBottom] = useState(0)
-  const [nameFocused, setNameFocused] = useState(false)
+  const [vvShrink, setVvShrink] = useState(0)
   const [layoutMode, setLayoutMode] = useState<'mobile' | 'desktop'>('mobile')
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const previewAreaRef = useRef<HTMLDivElement>(null)
   const previewViewportRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
@@ -159,7 +160,10 @@ export default function App() {
     const vv = window.visualViewport
     if (!vv) return
     const sync = () => {
+      // Real keyboard: visual viewport shrinks vs layout viewport.
+      const shrink = Math.max(0, window.innerHeight - vv.height)
       const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      setVvShrink(shrink)
       setVvBottom(inset)
     }
     sync()
@@ -171,29 +175,42 @@ export default function App() {
     }
   }, [])
 
+  // Only collapse the sheet when the viewport is actually reduced (real keyboard).
+  const keyboardOpen = vvShrink > 120
+
   useEffect(() => {
-    const el = previewViewportRef.current
+    const area = previewAreaRef.current
     const sheet = sheetRef.current
-    if (!el) return
+    if (!area) return
     const update = () => {
-      const w = el.clientWidth
-      const h = el.clientHeight
-      if (w <= 0 || h <= 0) return
-      // While typing / keyboard open, fit through the name slot so the
-      // name stays readable instead of shrinking the full 1440 card.
-      const fitH =
-        nameFocused || vvBottom > 40
-          ? Math.min(CARD_HEIGHT, NAME_SLOT.center[1] + 120)
-          : CARD_HEIGHT
-      const scale = Math.min(w / CARD_WIDTH, h / fitH)
-      setPreviewScale(Math.max(0.12, Math.min(1, scale)))
+      const hint = area.querySelector('.app__photo-hint') as HTMLElement | null
+      const hintH = hint && hint.offsetParent ? hint.offsetHeight + 6 : 0
+      // border-box: clientWidth/Height include padding — subtract it.
+      const cs = getComputedStyle(area)
+      const padX =
+        (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0)
+      const padY =
+        (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0)
+      const availW = Math.max(0, area.clientWidth - padX)
+      const availH = Math.max(0, area.clientHeight - padY - hintH)
+      if (availW <= 0 || availH <= 0) return
+      // Always fit the full card — frame hugs 1080×1440, no empty gutter.
+      const scale = Math.max(
+        0.12,
+        Math.min(1, availW / CARD_WIDTH, availH / CARD_HEIGHT),
+      )
+      setPreviewScale(scale)
+      setFrameSize({
+        w: Math.round(CARD_WIDTH * scale),
+        h: Math.round(CARD_HEIGHT * scale),
+      })
     }
     update()
     const ro = new ResizeObserver(update)
-    ro.observe(el)
+    ro.observe(area)
     if (sheet) ro.observe(sheet)
     return () => ro.disconnect()
-  }, [vvBottom, nameFocused])
+  }, [vvBottom, keyboardOpen, photoUrl])
 
   const applyClamped = useCallback(
     (next: PhotoTransform | ((prev: PhotoTransform) => PhotoTransform)) => {
@@ -214,6 +231,12 @@ export default function App() {
       setTransform: (t: PhotoTransform) => applyClamped(t),
       getCardCanvas: () => canvasRef.current,
       getPhotoSize: () => photoSizeRef.current,
+      /** Simulate a real keyboard: shrink = innerHeight − visualViewport.height */
+      setViewportShrink: (shrinkPx: number) => {
+        const shrink = Math.max(0, shrinkPx)
+        setVvShrink(shrink)
+        setVvBottom(shrink)
+      },
     }
     ;(window as unknown as { __badgeDebug?: typeof api }).__badgeDebug = api
     return () => {
@@ -526,13 +549,11 @@ export default function App() {
   }
 
   const busy = exporting
-  const keyboardOpen = nameFocused && vvBottom > 40
-  const typing = nameFocused
 
   return (
     <div
-      className={`app${typing ? ' app--typing' : ''}${keyboardOpen ? ' app--keyboard' : ''}`}
-      style={{ ['--vv-bottom' as string]: `${vvBottom}px` }}
+      className={`app${keyboardOpen ? ' app--keyboard' : ''}`}
+      style={{ ['--vv-bottom' as string]: `${keyboardOpen ? vvBottom : 0}px` }}
     >
       <header className="app__header">
         <img className="app__brand" src="/logos/logo_ideeza.png" alt="IDEEZA" />
@@ -545,9 +566,17 @@ export default function App() {
       </header>
 
       <div className="app__layout">
-        <div className="app__preview">
+        <div className="app__preview" ref={previewAreaRef}>
           <div className="app__preview-label">Live preview</div>
-          <div className="app__preview-viewport" ref={previewViewportRef}>
+          <div
+            className="app__preview-viewport"
+            ref={previewViewportRef}
+            style={
+              frameSize.w > 0
+                ? { width: frameSize.w, height: frameSize.h }
+                : undefined
+            }
+          >
             <div
               className="app__preview-scale"
               style={{
@@ -588,8 +617,6 @@ export default function App() {
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                onFocus={() => setNameFocused(true)}
-                onBlur={() => setNameFocused(false)}
                 placeholder="Hana Tadesse"
                 autoComplete="name"
                 maxLength={48}
