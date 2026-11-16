@@ -8,32 +8,25 @@ import {
   XIcon,
 } from './components/BrandIcons'
 import { InstagramSheet } from './components/InstagramSheet'
+import { SaveImageOverlay } from './components/SaveImageOverlay'
 import { ShareCard } from './components/ShareCard'
 import { ShareSheet } from './components/ShareSheet'
 import { Toast } from './components/Toast'
 import { CARD_HEIGHT, CARD_WIDTH, EVENT_DATES, UNIVERSITY } from './config/event'
 import { modalCopy } from './config/shareText'
 import {
-  canShareFiles,
-  dataUrlToFile,
-  downloadDataUrl,
-  renderCardPng,
-  shareCardFile,
-} from './lib/exportCard'
-import {
-  canvasToPngDataUrl,
-  renderPostFromCard,
-  renderStoryFromCard,
-} from './lib/exportFormats'
+  blobToFile,
+  canvasToPngBlob,
+  deliverPngFileSync,
+  deliverPngFileWhenReady,
+} from './lib/deliverExport'
+import { canShareFiles } from './lib/exportCard'
+import { renderPostFromCard, renderStoryFromCard } from './lib/exportFormats'
 import { focusTransformForPhoto } from './lib/faceFocus'
 import { waitForFonts } from './lib/fonts'
 import { clampTransform, inPhotoWindowLocal } from './lib/photoCover'
 import { cardToWindowLocal, clientToCard } from './lib/photoHit'
-import {
-  canNativeShareImage,
-  shareImageToApp,
-  type SocialPlatform,
-} from './lib/socialShare'
+import type { SocialPlatform } from './lib/socialShare'
 import {
   defaultPhotoTransform,
   PHOTO_ZOOM_MAX,
@@ -97,6 +90,10 @@ export default function App() {
   const [vvBottom, setVvBottom] = useState(0)
   const [vvShrink, setVvShrink] = useState(0)
   const [layoutMode, setLayoutMode] = useState<'mobile' | 'desktop'>('mobile')
+  const [saveOverlay, setSaveOverlay] = useState<{
+    url: string
+    filename: string
+  } | null>(null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const previewAreaRef = useRef<HTMLDivElement>(null)
@@ -104,6 +101,14 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
   const moreRef = useRef<HTMLDivElement>(null)
+
+  /** Pre-rendered PNG Files — ready for sync navigator.share in the click gesture */
+  const exportFilesRef = useRef<{
+    card: File | null
+    story: File | null
+    post: File | null
+  }>({ card: null, story: null, post: null })
+  const exportWarmGenRef = useRef(0)
 
   const transformRef = useRef(photoTransform)
   const photoSizeRef = useRef(photoSize)
@@ -287,90 +292,149 @@ export default function App() {
     return canvasRef.current
   }, [])
 
-  const runExport = useCallback(async () => {
+  const openSaveOverlay = useCallback((url: string, name: string) => {
+    setSaveOverlay((prev) => {
+      if (prev?.url.startsWith('blob:')) URL.revokeObjectURL(prev.url)
+      return { url, filename: name }
+    })
+  }, [])
+
+  const closeSaveOverlay = useCallback(() => {
+    setSaveOverlay((prev) => {
+      if (prev?.url.startsWith('blob:')) URL.revokeObjectURL(prev.url)
+      return null
+    })
+  }, [])
+
+  const buildCardFile = useCallback(async (): Promise<File> => {
     const canvas = await ensureCardReady()
-    if (!canvas) return null
+    if (!canvas) throw new Error('canvas not ready')
+    const blob = await canvasToPngBlob(canvas)
+    return blobToFile(blob, filename)
+  }, [ensureCardReady, filename])
+
+  const buildStoryFile = useCallback(async (): Promise<File> => {
+    const canvas = await ensureCardReady()
+    if (!canvas) throw new Error('canvas not ready')
+    const story = renderStoryFromCard(canvas)
+    const blob = await canvasToPngBlob(story)
+    return blobToFile(blob, storyFilename)
+  }, [ensureCardReady, storyFilename])
+
+  const buildPostFile = useCallback(async (): Promise<File> => {
+    const canvas = await ensureCardReady()
+    if (!canvas) throw new Error('canvas not ready')
+    const post = renderPostFromCard(canvas)
+    const blob = await canvasToPngBlob(post)
+    return blobToFile(blob, postFilename)
+  }, [ensureCardReady, postFilename])
+
+  // Pre-render export PNGs whenever the card settles (debounced).
+  useEffect(() => {
+    if (!fontsReady) return
+    const gen = ++exportWarmGenRef.current
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const card = await buildCardFile()
+          if (gen !== exportWarmGenRef.current) return
+          let story: File | null = null
+          let post: File | null = null
+          try {
+            story = await buildStoryFile()
+            post = await buildPostFile()
+          } catch {
+            /* story/post optional for warm cache */
+          }
+          if (gen !== exportWarmGenRef.current) return
+          exportFilesRef.current = { card, story, post }
+        } catch (err) {
+          console.warn('export warm failed', err)
+        }
+      })()
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [
+    fontsReady,
+    name,
+    photoUrl,
+    photoTransform,
+    buildCardFile,
+    buildStoryFile,
+    buildPostFile,
+  ])
+
+  const reportDeliver = (
+    result: string,
+    okMsg: string,
+    failToast = 'Couldn’t save the image. Try again.',
+  ) => {
+    if (result === 'shared') setStatus(okMsg)
+    else if (result === 'downloaded') setStatus(okMsg)
+    else if (result === 'overlay' || result === 'popup') {
+      setStatus('Long-press the image to save it.')
+    } else if (result === 'cancelled') setStatus(null)
+    else {
+      setToast(failToast)
+      setStatus(null)
+    }
+  }
+
+  /** Download PNG — share sync on iOS when File is pre-warmed. */
+  const onDownload = () => {
+    const cached = exportFilesRef.current.card
+    const title = `My Vibe Builders badge — ${UNIVERSITY}`
+    if (cached) {
+      const result = deliverPngFileSync({
+        file: cached,
+        title,
+        text: title,
+        onOverlay: (url) => openSaveOverlay(url, filename),
+      })
+      reportDeliver(result, 'PNG ready (1080×1440).')
+      return
+    }
     setExporting(true)
     setStatus('Rendering card…')
-    try {
-      return await renderCardPng(canvas)
-    } finally {
-      setExporting(false)
-    }
-  }, [ensureCardReady])
-
-  const shareOrDownload = async (
-    dataUrl: string,
-    fileName: string,
-    text?: string,
-  ) => {
-    const file = await dataUrlToFile(dataUrl, fileName)
-    if (canNativeShareImage(file)) {
-      try {
-        const result = await shareImageToApp({
-          dataUrl,
-          filename: fileName,
-          text: text || fileName,
-        })
-        if (result === 'shared') return 'shared' as const
-        if (result === 'cancelled') return 'cancelled' as const
-      } catch {
-        /* fall through */
-      }
-    }
-    downloadDataUrl(dataUrl, fileName)
-    return 'downloaded' as const
+    void deliverPngFileWhenReady({
+      getFile: buildCardFile,
+      title,
+      text: title,
+      onOverlay: (url) => openSaveOverlay(url, filename),
+    })
+      .then((result) => {
+        if (result !== 'error') {
+          void buildCardFile().then((f) => {
+            exportFilesRef.current.card = f
+          })
+        }
+        reportDeliver(result, 'PNG ready (1080×1440).')
+      })
+      .finally(() => setExporting(false))
   }
 
-  const onDownload = async () => {
-    try {
-      const dataUrl = await runExport()
-      if (!dataUrl) return
-      downloadDataUrl(dataUrl, filename)
-      setStatus('Downloaded PNG (1080×1440).')
-    } catch (err) {
-      console.error(err)
-      setStatus('Export failed. Try again or use another browser.')
-    }
-  }
-
-  const onNativeShare = async () => {
+  const onNativeShare = () => {
     setMoreOpen(false)
-    try {
-      const dataUrl = await runExport()
-      if (!dataUrl) return
-      const file = await dataUrlToFile(dataUrl, filename)
-      const shared = await shareCardFile(
-        file,
-        `My Vibe Builders badge — ${UNIVERSITY}`,
-      )
-      if (shared) setStatus('Shared!')
-      else {
-        downloadDataUrl(dataUrl, filename)
-        setStatus('Share not available — downloaded instead.')
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        setStatus(null)
-        return
-      }
-      console.error(err)
-      setStatus('Share failed. Try downloading instead.')
-    }
+    onDownload()
   }
 
   const onSocialShare = async (platform: SocialPlatform) => {
     setMoreOpen(false)
     try {
       setStatus(modalCopy.preparing)
-      const dataUrl = await runExport()
-      if (!dataUrl) {
-        setStatus(null)
-        setToast(modalCopy.prepareError)
-        return
-      }
+      const file = exportFilesRef.current.card ?? (await buildCardFile())
+      exportFilesRef.current.card = file
+      const dataUrl = URL.createObjectURL(file)
+      // ShareSheet still expects a displayable URL — convert via FileReader-ish
+      const reader = new FileReader()
+      const dataUrlStr = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(String(reader.result))
+        reader.onerror = () => reject(reader.error)
+        reader.readAsDataURL(file)
+      })
+      URL.revokeObjectURL(dataUrl)
       setStatus(null)
-      setShareSheet({ platform, imageDataUrl: dataUrl })
+      setShareSheet({ platform, imageDataUrl: dataUrlStr })
     } catch (err) {
       console.error(err)
       setStatus(null)
@@ -378,60 +442,100 @@ export default function App() {
     }
   }
 
-  const onIgStory = async () => {
+  const onIgStory = () => {
     setIgHint(null)
-    setExporting(true)
-    try {
-      const canvas = await ensureCardReady()
-      if (!canvas) return
-      const story = renderStoryFromCard(canvas)
-      const dataUrl = canvasToPngDataUrl(story)
-      const result = await shareOrDownload(
-        dataUrl,
-        storyFilename,
-        `My Vibe Builders Story — ${UNIVERSITY}`,
-      )
+    const title = `My Vibe Builders Story — ${UNIVERSITY}`
+    const cached = exportFilesRef.current.story
+    if (cached) {
+      const result = deliverPngFileSync({
+        file: cached,
+        title,
+        text: title,
+        preferShare: true,
+        onOverlay: (url) => openSaveOverlay(url, storyFilename),
+      })
       if (result === 'shared') {
         setIgHint('Shared — choose Instagram → Story')
         setStatus('Story ready (1080×1920).')
-      } else if (result === 'downloaded') {
-        setIgHint('Downloaded 1080×1920 — open Instagram Stories to add it')
-        setStatus('Story PNG downloaded (1080×1920).')
+      } else if (result === 'overlay' || result === 'popup') {
+        setIgHint('Long-press the image → Save, then Instagram → Story')
+      } else if (result === 'error') {
+        setIgHint('Couldn’t prepare Story. Try again.')
+        setToast('Couldn’t prepare Story. Try again.')
       }
-    } catch (err) {
-      console.error(err)
-      setIgHint('Couldn’t prepare Story. Try again.')
-    } finally {
-      setExporting(false)
+      return
     }
+    setExporting(true)
+    void deliverPngFileWhenReady({
+      getFile: buildStoryFile,
+      title,
+      text: title,
+      preferShare: true,
+      onOverlay: (url) => openSaveOverlay(url, storyFilename),
+    })
+      .then((result) => {
+        if (result === 'shared' || result === 'downloaded') {
+          void buildStoryFile().then((f) => {
+            exportFilesRef.current.story = f
+          })
+          setIgHint('Shared — choose Instagram → Story')
+          setStatus('Story ready (1080×1920).')
+        } else if (result === 'overlay' || result === 'popup') {
+          setIgHint('Long-press the image → Save, then Instagram → Story')
+        } else if (result === 'error') {
+          setIgHint('Couldn’t prepare Story. Try again.')
+          setToast('Couldn’t prepare Story. Try again.')
+        }
+      })
+      .finally(() => setExporting(false))
   }
 
-  const onIgPost = async () => {
+  const onIgPost = () => {
     setIgHint(null)
-    setExporting(true)
-    try {
-      const canvas = await ensureCardReady()
-      if (!canvas) return
-      const post = renderPostFromCard(canvas)
-      const dataUrl = canvasToPngDataUrl(post)
-      const result = await shareOrDownload(
-        dataUrl,
-        postFilename,
-        `My Vibe Builders badge — ${UNIVERSITY}`,
-      )
+    const title = `My Vibe Builders badge — ${UNIVERSITY}`
+    const cached = exportFilesRef.current.post
+    if (cached) {
+      const result = deliverPngFileSync({
+        file: cached,
+        title,
+        text: title,
+        preferShare: true,
+        onOverlay: (url) => openSaveOverlay(url, postFilename),
+      })
       if (result === 'shared') {
         setIgHint('Shared — choose Instagram → Post')
         setStatus('Post ready (1080×1440).')
-      } else if (result === 'downloaded') {
-        setIgHint('Downloaded 1080×1440 — open Instagram to post it')
-        setStatus('Post PNG downloaded (1080×1440).')
+      } else if (result === 'overlay' || result === 'popup') {
+        setIgHint('Long-press the image → Save, then Instagram → Post')
+      } else if (result === 'error') {
+        setIgHint('Couldn’t prepare Post. Try again.')
+        setToast('Couldn’t prepare Post. Try again.')
       }
-    } catch (err) {
-      console.error(err)
-      setIgHint('Couldn’t prepare Post. Try again.')
-    } finally {
-      setExporting(false)
+      return
     }
+    setExporting(true)
+    void deliverPngFileWhenReady({
+      getFile: buildPostFile,
+      title,
+      text: title,
+      preferShare: true,
+      onOverlay: (url) => openSaveOverlay(url, postFilename),
+    })
+      .then((result) => {
+        if (result === 'shared' || result === 'downloaded') {
+          void buildPostFile().then((f) => {
+            exportFilesRef.current.post = f
+          })
+          setIgHint('Shared — choose Instagram → Post')
+          setStatus('Post ready (1080×1440).')
+        } else if (result === 'overlay' || result === 'popup') {
+          setIgHint('Long-press the image → Save, then Instagram → Post')
+        } else if (result === 'error') {
+          setIgHint('Couldn’t prepare Post. Try again.')
+          setToast('Couldn’t prepare Post. Try again.')
+        }
+      })
+      .finally(() => setExporting(false))
   }
 
   const clientToLocal = (clientX: number, clientY: number) => {
@@ -609,7 +713,7 @@ export default function App() {
             className="app__form"
             onSubmit={(e) => {
               e.preventDefault()
-              void onDownload()
+              onDownload()
             }}
           >
             <label className="field">
@@ -738,7 +842,7 @@ export default function App() {
                         type="button"
                         role="menuitem"
                         className="app__more-item"
-                        onClick={() => void onNativeShare()}
+                        onClick={() => onNativeShare()}
                       >
                         <ShareIcon size={16} />
                         <span>Share…</span>
@@ -750,7 +854,7 @@ export default function App() {
                       className="app__more-item"
                       onClick={() => {
                         setMoreOpen(false)
-                        void onDownload()
+                        onDownload()
                       }}
                     >
                       <DownloadIcon size={16} />
@@ -793,8 +897,16 @@ export default function App() {
           busy={busy}
           hint={igHint}
           onClose={() => setIgOpen(false)}
-          onStory={() => void onIgStory()}
-          onPost={() => void onIgPost()}
+          onStory={() => onIgStory()}
+          onPost={() => onIgPost()}
+        />
+      )}
+
+      {saveOverlay && (
+        <SaveImageOverlay
+          imageUrl={saveOverlay.url}
+          filename={saveOverlay.filename}
+          onClose={closeSaveOverlay}
         />
       )}
     </div>
