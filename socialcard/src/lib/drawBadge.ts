@@ -7,7 +7,7 @@ import {
 } from '../config/badgeGeometry'
 import { CARD_HEIGHT, CARD_WIDTH, UNIVERSITY } from '../config/event'
 import { coverLayout } from './photoCover'
-import type { CardFormState } from '../types'
+import type { CardFormState, PhotoTransform } from '../types'
 
 export const BADGE_TILT_RAD = (BADGE_TILT_DEG * Math.PI) / 180
 
@@ -38,9 +38,11 @@ function drawPhotoLayer(
   ctx: CanvasRenderingContext2D,
   state: CardFormState,
   photoImg: HTMLImageElement | ImageBitmap | null,
+  transformOverride?: PhotoTransform,
 ) {
   const { center, width, height, radius } = PHOTO_WINDOW
   const [cx, cy] = center
+  const transform = transformOverride ?? state.photoTransform
 
   ctx.save()
   ctx.translate(cx, cy)
@@ -65,7 +67,7 @@ function drawPhotoLayer(
       'naturalHeight' in photoImg && photoImg.naturalHeight
         ? photoImg.naturalHeight
         : photoImg.height
-    const { drawW, drawH, ox, oy } = coverLayout(sw, sh, state.photoTransform)
+    const { drawW, drawH, ox, oy } = coverLayout(sw, sh, transform)
     ctx.drawImage(
       photoImg,
       0,
@@ -176,29 +178,46 @@ export async function loadImage(src: string): Promise<HTMLImageElement> {
   return img
 }
 
-export async function paintBadge(
+/** Offscreen buffer — paint here, then blit to the visible canvas (no flicker). */
+let offscreen: HTMLCanvasElement | null = null
+
+function getOffscreen(): HTMLCanvasElement {
+  if (!offscreen) {
+    offscreen = document.createElement('canvas')
+    offscreen.width = CARD_WIDTH
+    offscreen.height = CARD_HEIGHT
+  }
+  return offscreen
+}
+
+export function paintBadge(
   canvas: HTMLCanvasElement,
   state: CardFormState,
   template: HTMLImageElement,
   photoImg: HTMLImageElement | null,
+  transformOverride?: PhotoTransform,
 ) {
-  canvas.width = CARD_WIDTH
-  canvas.height = CARD_HEIGHT
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
+  if (canvas.width !== CARD_WIDTH) canvas.width = CARD_WIDTH
+  if (canvas.height !== CARD_HEIGHT) canvas.height = CARD_HEIGHT
 
-  // Opaque clear — never leave transparent→black seams
-  ctx.save()
+  const buf = getOffscreen()
+  const bctx = buf.getContext('2d')
+  const ctx = canvas.getContext('2d')
+  if (!bctx || !ctx) return
+
+  bctx.setTransform(1, 0, 0, 1, 0, 0)
+  bctx.globalCompositeOperation = 'source-over'
+  bctx.fillStyle = '#fbfaff'
+  bctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
+
+  bctx.drawImage(template, 0, 0, CARD_WIDTH, CARD_HEIGHT)
+  drawPhotoLayer(bctx, state, photoImg, transformOverride)
+  drawName(bctx, state.name)
+  drawEventLine(bctx)
+
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.globalCompositeOperation = 'source-over'
-  ctx.fillStyle = '#fbfaff'
-  ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
-  ctx.restore()
-
-  ctx.drawImage(template, 0, 0, CARD_WIDTH, CARD_HEIGHT)
-  drawPhotoLayer(ctx, state, photoImg)
-  drawName(ctx, state.name)
-  drawEventLine(ctx)
+  ctx.drawImage(buf, 0, 0)
 }
 
 export function canvasToPngDataUrl(canvas: HTMLCanvasElement): string {
