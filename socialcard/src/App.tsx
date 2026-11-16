@@ -9,7 +9,7 @@ import {
 } from './components/BrandIcons'
 import { InstagramSheet } from './components/InstagramSheet'
 import { SaveImageOverlay } from './components/SaveImageOverlay'
-import { ShareCard } from './components/ShareCard'
+import { ShareCard, type ShareCardHandle } from './components/ShareCard'
 import { ShareSheet } from './components/ShareSheet'
 import { Toast } from './components/Toast'
 import { CARD_HEIGHT, CARD_WIDTH, EVENT_DATES, UNIVERSITY } from './config/event'
@@ -24,7 +24,11 @@ import { canShareFiles } from './lib/exportCard'
 import { renderPostFromCard, renderStoryFromCard } from './lib/exportFormats'
 import { focusTransformForPhoto } from './lib/faceFocus'
 import { waitForFonts } from './lib/fonts'
-import { clampTransform, inPhotoWindowLocal } from './lib/photoCover'
+import {
+  clampTransform,
+  inPhotoWindowLocal,
+  liveClampTransform,
+} from './lib/photoCover'
 import { cardToWindowLocal, clientToCard } from './lib/photoHit'
 import type { SocialPlatform } from './lib/socialShare'
 import {
@@ -96,6 +100,7 @@ export default function App() {
   } | null>(null)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const shareCardRef = useRef<ShareCardHandle>(null)
   const previewAreaRef = useRef<HTMLDivElement>(null)
   const previewViewportRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -111,9 +116,12 @@ export default function App() {
   const exportWarmGenRef = useRef(0)
 
   const transformRef = useRef(photoTransform)
+  const liveTransformRef = useRef(photoTransform)
   const photoSizeRef = useRef(photoSize)
   const previewScaleRef = useRef(previewScale)
   const layoutModeRef = useRef(layoutMode)
+  const rafDrawRef = useRef(0)
+  const zoomUiRef = useRef<HTMLSpanElement>(null)
 
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
   const modeRef = useRef<PointerMode>('idle')
@@ -129,6 +137,7 @@ export default function App() {
 
   useEffect(() => {
     transformRef.current = photoTransform
+    liveTransformRef.current = photoTransform
   }, [photoTransform])
   useEffect(() => {
     photoSizeRef.current = photoSize
@@ -139,6 +148,26 @@ export default function App() {
   useEffect(() => {
     layoutModeRef.current = layoutMode
   }, [layoutMode])
+
+  const scheduleLiveDraw = useCallback(() => {
+    if (rafDrawRef.current) return
+    rafDrawRef.current = requestAnimationFrame(() => {
+      rafDrawRef.current = 0
+      shareCardRef.current?.drawLive(liveTransformRef.current)
+      if (zoomUiRef.current) {
+        zoomUiRef.current.textContent = `${liveTransformRef.current.zoom.toFixed(1)}×`
+      }
+    })
+  }, [])
+
+  const commitLiveTransform = useCallback(() => {
+    const size = photoSizeRef.current
+    const raw = liveTransformRef.current
+    const next = size ? clampTransform(raw, size.w, size.h) : raw
+    liveTransformRef.current = next
+    transformRef.current = next
+    setPhotoTransform(next)
+  }, [])
 
   useEffect(() => {
     waitForFonts().then(() => setFontsReady(true))
@@ -188,8 +217,9 @@ export default function App() {
     const sheet = sheetRef.current
     if (!area) return
     const update = () => {
+      // Hint row always reserved (even when invisible) — use min-height
       const hint = area.querySelector('.app__photo-hint') as HTMLElement | null
-      const hintH = hint && hint.offsetParent ? hint.offsetHeight + 6 : 0
+      const hintH = hint ? Math.max(hint.offsetHeight, 18) + 4 : 0
       // border-box: clientWidth/Height include padding — subtract it.
       const cs = getComputedStyle(area)
       const padX =
@@ -199,7 +229,6 @@ export default function App() {
       const availW = Math.max(0, area.clientWidth - padX)
       const availH = Math.max(0, area.clientHeight - padY - hintH)
       if (availW <= 0 || availH <= 0) return
-      // Always fit the full card — frame hugs 1080×1440, no empty gutter.
       const scale = Math.max(
         0.12,
         Math.min(1, availW / CARD_WIDTH, availH / CARD_HEIGHT),
@@ -216,6 +245,17 @@ export default function App() {
     if (sheet) ro.observe(sheet)
     return () => ro.disconnect()
   }, [vvBottom, keyboardOpen, photoUrl])
+
+  // Non-passive touchmove lock while dragging on the card
+  useEffect(() => {
+    const vp = previewViewportRef.current
+    if (!vp) return
+    const block = (e: TouchEvent) => {
+      if (modeRef.current !== 'idle') e.preventDefault()
+    }
+    vp.addEventListener('touchmove', block, { passive: false })
+    return () => vp.removeEventListener('touchmove', block)
+  }, [])
 
   const applyClamped = useCallback(
     (next: PhotoTransform | ((prev: PhotoTransform) => PhotoTransform)) => {
@@ -557,8 +597,10 @@ export default function App() {
     const local = clientToLocal(e.clientX, e.clientY)
     if (!local || !inPhotoWindowLocal(local.lx, local.ly, 6)) return
 
+    e.preventDefault()
     e.currentTarget.setPointerCapture(e.pointerId)
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    liveTransformRef.current = transformRef.current
 
     if (pointersRef.current.size === 1) {
       modeRef.current = 'drag'
@@ -574,7 +616,7 @@ export default function App() {
         (pts[0].x + pts[1].x) / 2,
         (pts[0].y + pts[1].y) / 2,
       )
-      const t = transformRef.current
+      const t = liveTransformRef.current
       pinchStartRef.current = {
         dist,
         zoom: t.zoom,
@@ -589,7 +631,9 @@ export default function App() {
 
   const onHitPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!pointersRef.current.has(e.pointerId)) return
+    e.preventDefault()
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    const size = photoSizeRef.current
 
     if (modeRef.current === 'drag' && pointersRef.current.size === 1) {
       const local = clientToLocal(e.clientX, e.clientY)
@@ -598,11 +642,12 @@ export default function App() {
       const dlx = local.lx - last.lx
       const dly = local.ly - last.ly
       dragLastLocalRef.current = local
-      applyClamped((t) => ({
-        ...t,
-        ox: t.ox + dlx,
-        oy: t.oy + dly,
-      }))
+      const prev = liveTransformRef.current
+      const proposed = { ...prev, ox: prev.ox + dlx, oy: prev.oy + dly }
+      liveTransformRef.current = size
+        ? liveClampTransform(proposed, size.w, size.h, prev)
+        : proposed
+      scheduleLiveDraw()
       return
     }
 
@@ -624,11 +669,16 @@ export default function App() {
       )
       const midDx = mid ? mid.lx - start.midLx : 0
       const midDy = mid ? mid.ly - start.midLy : 0
-      applyClamped({
+      const prev = liveTransformRef.current
+      const proposed = {
         ox: start.ox + midDx,
         oy: start.oy + midDy,
         zoom: nextZoom,
-      })
+      }
+      liveTransformRef.current = size
+        ? liveClampTransform(proposed, size.w, size.h, prev)
+        : proposed
+      scheduleLiveDraw()
     }
   }
 
@@ -644,6 +694,8 @@ export default function App() {
       modeRef.current = 'idle'
       dragLastLocalRef.current = null
       pinchStartRef.current = null
+      // Commit once — no snap; soft clamp already kept the window filled
+      commitLiveTransform()
     } else if (pointersRef.current.size === 1) {
       modeRef.current = 'drag'
       pinchStartRef.current = null
@@ -689,23 +741,24 @@ export default function App() {
                 ['--preview-scale' as string]: String(previewScale),
               }}
             >
-              <ShareCard state={state} canvasRef={canvasRef} />
+              <ShareCard ref={shareCardRef} state={state} canvasRef={canvasRef} />
             </div>
-            {photoUrl && (
-              <div
-                className="app__photo-hit"
-                role="presentation"
-                aria-label="Drag to reposition photo"
-                onPointerDown={onHitPointerDown}
-                onPointerMove={onHitPointerMove}
-                onPointerUp={endPointer}
-                onPointerCancel={endPointer}
-              />
-            )}
+            <div
+              className={`app__photo-hit${photoUrl ? '' : ' is-disabled'}`}
+              role="presentation"
+              aria-label="Drag to reposition photo"
+              onPointerDown={onHitPointerDown}
+              onPointerMove={onHitPointerMove}
+              onPointerUp={endPointer}
+              onPointerCancel={endPointer}
+            />
           </div>
-          {photoUrl && (
-            <p className="app__photo-hint">Drag to move · pinch to zoom</p>
-          )}
+          <p
+            className={`app__photo-hint${photoUrl ? '' : ' is-placeholder'}`}
+            aria-hidden={!photoUrl}
+          >
+            Drag to move · pinch to zoom
+          </p>
         </div>
 
         <div className="app__sheet" ref={sheetRef}>
@@ -746,40 +799,49 @@ export default function App() {
               >
                 {photoUrl ? 'Change photo' : 'Pick photo'}
               </button>
-              {photoUrl && (
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--reset"
-                  onClick={resetPhoto}
-                >
-                  Reset
-                </button>
-              )}
+              <button
+                type="button"
+                className={`btn btn--ghost btn--reset${photoUrl ? '' : ' is-placeholder'}`}
+                onClick={resetPhoto}
+                disabled={!photoUrl}
+                aria-hidden={!photoUrl}
+              >
+                Reset
+              </button>
             </div>
 
-            {photoUrl && (
-              <div className="app__zoom">
-                <label className="app__zoom-label">
-                  <span>Zoom</span>
-                  <input
-                    type="range"
-                    min={PHOTO_ZOOM_MIN}
-                    max={PHOTO_ZOOM_MAX}
-                    step={0.01}
-                    value={photoTransform.zoom}
-                    onChange={(e) =>
-                      applyClamped((t) => ({
-                        ...t,
-                        zoom: Number(e.target.value),
-                      }))
-                    }
-                  />
-                  <span className="app__zoom-val">
-                    {photoTransform.zoom.toFixed(1)}×
-                  </span>
-                </label>
-              </div>
-            )}
+            <div className={`app__zoom${photoUrl ? '' : ' is-placeholder'}`}>
+              <label className="app__zoom-label">
+                <span>Zoom</span>
+                <input
+                  type="range"
+                  min={PHOTO_ZOOM_MIN}
+                  max={PHOTO_ZOOM_MAX}
+                  step={0.01}
+                  value={photoTransform.zoom}
+                  disabled={!photoUrl}
+                  onInput={(e) => {
+                    const zoom = Number((e.target as HTMLInputElement).value)
+                    const prev = liveTransformRef.current
+                    const size = photoSizeRef.current
+                    const proposed = { ...prev, zoom }
+                    liveTransformRef.current = size
+                      ? liveClampTransform(proposed, size.w, size.h, prev)
+                      : proposed
+                    scheduleLiveDraw()
+                  }}
+                  onChange={(e) => {
+                    const zoom = Number(e.target.value)
+                    const prev = liveTransformRef.current
+                    liveTransformRef.current = { ...prev, zoom }
+                    commitLiveTransform()
+                  }}
+                />
+                <span className="app__zoom-val" ref={zoomUiRef}>
+                  {photoTransform.zoom.toFixed(1)}×
+                </span>
+              </label>
+            </div>
 
             <button
               type="submit"

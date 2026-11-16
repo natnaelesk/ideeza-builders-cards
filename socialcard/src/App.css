@@ -35,16 +35,21 @@
   .app {
     height: 100dvh;
     height: 100svh;
+    height: 100vh;
     max-height: 100dvh;
+    max-height: 100svh;
     display: grid;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     padding: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     overflow: hidden;
+    overscroll-behavior: none;
+    min-height: 0;
   }
 
   /* Collapse only when visualViewport is actually reduced (real keyboard). */
   .app--keyboard {
-    --sheet-max: 132px;
+    --sheet-max: none;
   }
 
   .app__header {
@@ -95,22 +100,19 @@
   .app__layout {
     position: relative;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    display: contents; /* children participate in .app grid */
   }
 
   .app__preview {
-    flex: 1;
+    grid-row: 2;
     min-height: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    /* Keep the hugged card near the sheet — no tall empty band above the panel */
     justify-content: flex-end;
     gap: 0;
-    padding: 0 10px;
-    padding-bottom: calc(var(--sheet-max) + 10px + var(--vv-bottom));
+    padding: 0 10px 6px;
+    overflow: hidden;
   }
 
   .app__preview-label {
@@ -158,14 +160,25 @@
     cursor: grabbing;
   }
 
+  .app__photo-hit.is-disabled {
+    pointer-events: none;
+  }
+
   .app__photo-hint {
     flex-shrink: 0;
-    margin: 6px 0 0;
+    margin: 4px 0 0;
+    min-height: 1.1em;
     text-align: center;
     font-size: 0.7rem;
     font-weight: 600;
     color: var(--muted);
     letter-spacing: 0.01em;
+    transition: opacity 0.18s ease;
+  }
+
+  .app__photo-hint.is-placeholder {
+    opacity: 0;
+    pointer-events: none;
   }
 
   .app--keyboard .app__photo-hint {
@@ -173,15 +186,27 @@
   }
 
   .app__sheet {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: var(--vv-bottom);
+    grid-row: 3;
+    position: relative;
     z-index: 20;
-    max-height: min(var(--sheet-max), 48dvh);
-    padding: 0 10px calc(10px + env(safe-area-inset-bottom, 0px));
+    width: 100%;
+    max-height: none;
+    padding: 0 10px 8px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     pointer-events: none;
-    overflow: visible;
+    flex-shrink: 0;
+    animation: sheet-in 0.18s ease-out;
+  }
+
+  @keyframes sheet-in {
+    from {
+      opacity: 0.65;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .app__form {
@@ -190,12 +215,11 @@
     display: flex;
     flex-direction: column;
     gap: 7px;
-    padding: 11px 12px 10px;
+    padding: 10px 12px 10px;
     border-radius: 20px;
-    max-height: min(var(--sheet-max), 48dvh);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: none;
     background:
       linear-gradient(
         155deg,
@@ -209,6 +233,9 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(18px) saturate(1.35);
     -webkit-backdrop-filter: blur(18px) saturate(1.35);
+    transition:
+      padding 0.18s ease,
+      gap 0.18s ease;
   }
 
   .app__form::before {
@@ -424,10 +451,11 @@
   border-radius: 14px;
   padding: 11px 12px;
   font: inherit;
-  font-size: 1rem;
+  font-size: 16px; /* prevent iOS focus zoom */
   font-weight: 500;
   color: var(--navy);
   width: 100%;
+  touch-action: manipulation;
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
@@ -547,16 +575,18 @@
   font-size: 0.9rem;
   border-radius: 999px;
   padding: 12px 16px;
+  min-height: 44px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  touch-action: manipulation;
   transition:
-    opacity 0.15s ease,
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    background 0.15s ease;
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
 }
 
 .btn:disabled {
@@ -565,8 +595,19 @@
 }
 
 .btn:not(:disabled):active {
-  transform: scale(0.97);
-  opacity: 0.92;
+  transform: scale(0.96);
+  opacity: 0.9;
+}
+
+.app__zoom.is-placeholder,
+.btn--reset.is-placeholder {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app__zoom {
+  min-height: 28px;
+  transition: opacity 0.18s ease;
 }
 
 .btn--primary,
