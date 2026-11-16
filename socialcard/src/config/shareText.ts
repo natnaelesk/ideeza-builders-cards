@@ -7,9 +7,15 @@
  * =============================================================================
  */
 
-import { cardLayout } from './cardLayout'
+import {
+  EVENT_DATES,
+  EVENT_NAME,
+  PRIZE_HEADLINE,
+  REGISTER_URL as REG_URL,
+  UNIVERSITY,
+} from './event'
 
-export const REGISTER_URL = cardLayout.registerUrl
+export const REGISTER_URL = REG_URL
 export const X_CHAR_LIMIT = 280
 export const X_URL_WEIGHT = 23
 
@@ -100,7 +106,7 @@ export const modalCopy = {
   openLinkedIn: 'Open LinkedIn',
   openX: 'Open X',
   close: 'Close',
-  imageAlt: 'Your share card (1080×1350)',
+  imageAlt: 'Your share card (1080×1440)',
   longPressHint: 'Tip: you can also long-press the image to save it.',
   preparing: 'Preparing your card…',
   prepareError: 'Couldn’t render the card. Try Download PNG instead.',
@@ -149,10 +155,10 @@ export function xWeightedLength(text: string): number {
 function uniFields(fields: ShareFields) {
   return {
     name: fields.name.trim(),
-    university: fields.universityName?.trim() || cardLayout.university.name,
-    dates: fields.universityDates?.trim() || cardLayout.university.dates,
-    event: cardLayout.eventName,
-    prize: cardLayout.prizeHeadline,
+    university: fields.universityName?.trim() || UNIVERSITY,
+    dates: fields.universityDates?.trim() || EVENT_DATES,
+    event: EVENT_NAME,
+    prize: PRIZE_HEADLINE,
     register: REGISTER_URL,
   }
 }
