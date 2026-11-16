@@ -6,9 +6,10 @@ import {
   TEMPLATE_DATES,
 } from '../config/badgeGeometry'
 import { CARD_HEIGHT, CARD_WIDTH, UNIVERSITY } from '../config/event'
+import { coverLayout } from './photoCover'
 import type { CardFormState } from '../types'
 
-const RAD = (BADGE_TILT_DEG * Math.PI) / 180
+export const BADGE_TILT_RAD = (BADGE_TILT_DEG * Math.PI) / 180
 
 function roundRectPath(
   ctx: CanvasRenderingContext2D,
@@ -29,8 +30,9 @@ function roundRectPath(
 }
 
 /**
- * Draw the uploaded photo with object-fit: cover math, clipped to the
- * tilted rounded photo window. Transform pans/zooms around cover center.
+ * Draw in the badge window's de-rotated frame:
+ * translate → rotate → clip rounded rect → fill backdrop → cover-fit photo.
+ * Backdrop fill guarantees no black/transparent gaps at any edge.
  */
 function drawPhotoLayer(
   ctx: CanvasRenderingContext2D,
@@ -38,30 +40,44 @@ function drawPhotoLayer(
   photoImg: HTMLImageElement | ImageBitmap | null,
 ) {
   const { center, width, height, radius } = PHOTO_WINDOW
-  const t = state.photoTransform
   const [cx, cy] = center
 
   ctx.save()
   ctx.translate(cx, cy)
-  ctx.rotate(RAD)
+  ctx.rotate(BADGE_TILT_RAD)
 
   roundRectPath(ctx, -width / 2, -height / 2, width, height, radius)
   ctx.clip()
 
+  // Always paint a light backdrop first — never let canvas default/black show.
+  const grad = ctx.createLinearGradient(0, -height / 2, 0, height / 2)
+  grad.addColorStop(0, '#ece8f2')
+  grad.addColorStop(1, '#d9d4e3')
+  ctx.fillStyle = grad
+  ctx.fillRect(-width / 2 - 2, -height / 2 - 2, width + 4, height + 4)
+
   if (photoImg) {
-    const sw = photoImg.width
-    const sh = photoImg.height
-    // object-fit: cover
-    const scale0 = Math.max(width / sw, height / sh) * t.zoom
-    const dw = sw * scale0
-    const dh = sh * scale0
-    const ox = (t.x / 50) * (dw - width) * 0.5
-    const oy = (-t.y / 50) * (dh - height) * 0.5
-    ctx.drawImage(photoImg, 0, 0, sw, sh, -dw / 2 + ox, -dh / 2 + oy, dw, dh)
+    const sw =
+      'naturalWidth' in photoImg && photoImg.naturalWidth
+        ? photoImg.naturalWidth
+        : photoImg.width
+    const sh =
+      'naturalHeight' in photoImg && photoImg.naturalHeight
+        ? photoImg.naturalHeight
+        : photoImg.height
+    const { drawW, drawH, ox, oy } = coverLayout(sw, sh, state.photoTransform)
+    ctx.drawImage(
+      photoImg,
+      0,
+      0,
+      sw,
+      sh,
+      -drawW / 2 + ox,
+      -drawH / 2 + oy,
+      drawW,
+      drawH,
+    )
   } else {
-    // No-photo fallback: soft silhouette + initials
-    ctx.fillStyle = '#e6e0ee'
-    ctx.fillRect(-width / 2, -height / 2, width, height)
     const initials = (state.name.trim() || '?')
       .split(/\s+/)
       .map((p) => p[0])
@@ -109,7 +125,7 @@ function drawName(ctx: CanvasRenderingContext2D, name: string) {
   const [cx, cy] = NAME_SLOT.center
   ctx.save()
   ctx.translate(cx, cy)
-  ctx.rotate(RAD)
+  ctx.rotate(BADGE_TILT_RAD)
   const size = fitText(ctx, label, NAME_SLOT.maxWidth, NAME_SLOT.fontSize, 28)
   ctx.font = `400 ${size}px Anton, "Arial Narrow", sans-serif`
   ctx.textAlign = 'center'
@@ -134,7 +150,7 @@ function drawEventLine(ctx: CanvasRenderingContext2D) {
   const [cx, cy] = EVENT_SLOT.center
   ctx.save()
   ctx.translate(cx, cy)
-  ctx.rotate(RAD)
+  ctx.rotate(BADGE_TILT_RAD)
   ctx.font = `600 ${EVENT_SLOT.fontSize}px Poppins, sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -171,9 +187,15 @@ export async function paintBadge(
   const ctx = canvas.getContext('2d')
   if (!ctx) return
 
-  ctx.clearRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
-  ctx.drawImage(template, 0, 0, CARD_WIDTH, CARD_HEIGHT)
+  // Opaque clear — never leave transparent→black seams
+  ctx.save()
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.globalCompositeOperation = 'source-over'
+  ctx.fillStyle = '#fbfaff'
+  ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
+  ctx.restore()
 
+  ctx.drawImage(template, 0, 0, CARD_WIDTH, CARD_HEIGHT)
   drawPhotoLayer(ctx, state, photoImg)
   drawName(ctx, state.name)
   drawEventLine(ctx)
