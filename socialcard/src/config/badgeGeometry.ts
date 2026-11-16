@@ -9,19 +9,19 @@ export const PHOTO_WINDOW = {
   width: 403.1,
   height: 380.5,
   /** Corner radius of the photo window (px in template space) */
-  radius: 28,
+  radius: 26,
 }
 
 export const NAME_SLOT = {
-  center: [540, 760] as [number, number],
+  center: [518.5, 764.5] as [number, number],
   maxWidth: 520,
-  fontSize: 64,
+  fontSize: 63,
 }
 
 export const EVENT_SLOT = {
-  center: [560, 888] as [number, number],
-  maxWidth: 480,
-  fontSize: 22,
+  center: [522.5, 922.0] as [number, number],
+  maxWidth: 373,
+  fontSize: 28,
 }
 
 export const TEMPLATE_DATES = 'Nov 20–22'

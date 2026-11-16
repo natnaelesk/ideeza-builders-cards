@@ -164,9 +164,10 @@ function drawName(ctx: CanvasRenderingContext2D, name: string) {
   ctx.font = `400 ${size}px Anton, "Arial Narrow", sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.shadowColor = 'rgba(40, 10, 80, 0.35)'
-  ctx.shadowBlur = 10
-  ctx.shadowOffsetY = 2
+  ctx.shadowColor = 'rgba(40, 10, 80, 0.4)'
+  ctx.shadowBlur = 8
+  ctx.shadowOffsetX = 1
+  ctx.shadowOffsetY = 3
   ctx.fillStyle = '#ffffff'
   ctx.fillText(label, 0, 0)
   ctx.restore()

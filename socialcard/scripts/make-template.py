@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 """
-Build socialcard/public/template/badge-template.png from the approved
-final-badge-v2 source (1080×1440).
+Build socialcard/public/template/badge-template.png from final-badge-v2.
 
-Removes:
-  (a) the sample person inside the rounded photo window (keeps light backdrop
-      + white rounded border)
-  (b) the name "HANA TADESSE"
-  (c) the event line text "Wolkite University · Nov 20–22"
-      (calendar icon kept; university+date re-rendered by the app)
+Pipeline:
+  1. Measure photo-window tilt; de-rotate so the badge is axis-aligned.
+  2. Edit ONLY inside the badge in that upright frame:
+       - photo window → light lavender gradient (keep white border)
+       - name "HANA TADESSE" → column blend from clean holo above/below
+       - event line text (keep calendar icon) → same column blend
+  3. Warp edits back; composite with a badge mask so every pixel outside
+     the badge is byte-identical to the source.
 
-Everything else stays pixel-identical. Reproducible — run:
-
-  python3 scripts/make-template.py
+Run:  python3 scripts/make-template.py
 """
 
 from __future__ import annotations
@@ -32,6 +31,7 @@ SRC_CANDIDATES = [
 ]
 OUT = ROOT / "public" / "template" / "badge-template.png"
 META = ROOT / "public" / "template" / "badge-geometry.json"
+DIFF_OUT = Path("/opt/cursor/artifacts/tmpl-diff.png")
 
 
 def find_source() -> Path:
@@ -42,276 +42,549 @@ def find_source() -> Path:
 
 
 def order_corners(box: np.ndarray) -> np.ndarray:
-    """Return corners as TL, TR, BR, BL."""
     c = box.astype(np.float64)
     s = c.sum(axis=1)
-    diff = np.diff(c, axis=1).ravel()
-    tl = c[np.argmin(s)]
-    br = c[np.argmax(s)]
-    tr = c[np.argmin(diff)]
-    bl = c[np.argmax(diff)]
+    d = np.diff(c, axis=1).ravel()
+    tl, br = c[np.argmin(s)], c[np.argmax(s)]
+    tr, bl = c[np.argmin(d)], c[np.argmax(d)]
     return np.array([tl, tr, br, bl], dtype=np.float64)
 
 
-def detect_photo_window(gray: np.ndarray) -> tuple[np.ndarray, float, tuple[float, float]]:
-    """Detect the light photo-window interior via bright pixels; return corners, tilt_deg, center."""
-    h, w = gray.shape
+def detect_photo_window(gray: np.ndarray) -> tuple[np.ndarray, float]:
     roi = gray[240:800, 160:920]
     mask = (roi > 200).astype(np.uint8) * 255
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
     cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    best = None
-    for c in cnts:
-        area = cv2.contourArea(c)
-        if area < 40_000:
-            continue
-        rect = cv2.minAreaRect(c)
-        if best is None or area > best[0]:
-            best = (area, rect)
-    if best is None:
-        raise RuntimeError("photo window not found")
-    area, rect = best
+    best = max(
+        (c for c in cnts if cv2.contourArea(c) > 40_000),
+        key=cv2.contourArea,
+    )
+    rect = cv2.minAreaRect(best)
     box = cv2.boxPoints(rect)
     box[:, 0] += 160
     box[:, 1] += 240
     corners = order_corners(box)
-    # Top-edge angle: degrees clockwise from +x (positive = clockwise)
-    tl, tr, br, bl = corners
+    tl, tr, _, _ = corners
     tilt = math.degrees(math.atan2(tr[1] - tl[1], tr[0] - tl[0]))
-    center = (float(rect[0][0] + 160), float(rect[0][1] + 240))
-    return corners, float(tilt), center
+    return corners, float(tilt)
 
 
-def inset_quad(corners: np.ndarray, px: float) -> np.ndarray:
-    """Shrink quad toward centroid by ~px pixels along each edge normal."""
-    c = corners.mean(axis=0)
-    out = []
-    for p in corners:
-        v = p - c
-        n = np.linalg.norm(v)
-        if n < 1e-6:
-            out.append(p)
-        else:
-            out.append(p - v / n * px)
-    return np.array(out, dtype=np.float64)
+def rot_matrix(cx: float, cy: float, deg_ccw: float) -> np.ndarray:
+    return cv2.getRotationMatrix2D((cx, cy), deg_ccw, 1.0)
 
 
-def sample_backdrop(bgr: np.ndarray, corners: np.ndarray) -> tuple[int, int, int]:
-    """Sample light backdrop color from near the top-inner corners of the photo."""
-    inset = inset_quad(corners, 28)
-    samples = []
-    for p in inset[:2]:  # TL, TR
-        x, y = int(p[0]), int(p[1])
-        patch = bgr[max(0, y - 4) : y + 8, max(0, x - 4) : x + 8]
-        if patch.size:
-            samples.append(patch.reshape(-1, 3).mean(axis=0))
-    # Also mid-top
-    mid = (inset[0] + inset[1]) / 2
-    x, y = int(mid[0]), int(mid[1]) + 20
-    patch = bgr[y : y + 12, x - 20 : x + 20]
-    if patch.size:
-        samples.append(patch.reshape(-1, 3).mean(axis=0))
-    mean = np.mean(samples, axis=0)
-    # Bias slightly toward soft lavender-gray
-    mean = mean * 0.85 + np.array([235, 230, 242]) * 0.15
-    return tuple(int(np.clip(v, 0, 255)) for v in mean)
+def transform_pts(M: np.ndarray, pts: np.ndarray) -> np.ndarray:
+    hom = np.hstack([pts.astype(np.float64), np.ones((len(pts), 1))])
+    return (M @ hom.T).T
 
 
-def clear_photo_window(bgr: np.ndarray, corners: np.ndarray) -> np.ndarray:
-    """Fill photo interior with seamless light backdrop; keep white border."""
-    out = bgr.copy()
-    # Inset so the white rounded border remains untouched
-    inner = inset_quad(corners, 12)
-    # Prefer light pixels near top of window (backdrop), not face/clothes
-    probe = np.zeros(bgr.shape[:2], np.uint8)
-    cv2.fillConvexPoly(probe, inset_quad(corners, 40).astype(np.int32), 255)
-    ys, xs = np.where(probe > 0)
-    if len(xs):
-        # Top 20% of window pixels that are bright
-        y_cut = np.percentile(ys, 25)
-        top = (ys <= y_cut) & (probe[ys, xs] > 0)
-        vals = bgr[ys[top], xs[top]]
-        # Keep only bright-ish samples
-        lum = vals.mean(axis=1)
-        bright = vals[lum > np.percentile(lum, 60)]
-        if len(bright):
-            color = tuple(int(v) for v in bright.mean(axis=0))
-        else:
-            color = sample_backdrop(bgr, corners)
-    else:
-        color = sample_backdrop(bgr, corners)
-    # Soft lavender-gray fallback if still too dark
-    if np.mean(color) < 160:
-        color = (228, 222, 232)
-    overlay = out.copy()
-    cv2.fillConvexPoly(overlay, inner.astype(np.int32), color)
-    mask = np.zeros(bgr.shape[:2], np.uint8)
-    cv2.fillConvexPoly(mask, inner.astype(np.int32), 255)
-    mask = cv2.GaussianBlur(mask, (0, 0), 2.2)
-    m = (mask.astype(np.float32) / 255.0)[..., None]
-    out = (overlay * m + out * (1 - m)).astype(np.uint8)
-    return out
-
-
-def rotated_band_mask(
-    shape: tuple[int, int],
-    center: tuple[float, float],
-    width: float,
-    height: float,
-    tilt_deg: float,
-    dilate: int = 6,
+def column_blend_fill(
+    img: np.ndarray,
+    mask: np.ndarray,
+    sample_pad: int = 10,
 ) -> np.ndarray:
-    """Axis-aligned rect in badge space → screen mask at tilt."""
-    cx, cy = center
-    hw, hh = width / 2, height / 2
-    local = np.array(
-        [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]], dtype=np.float64
-    )
-    # Badge content is tilted clockwise on screen → use clockwise rotation
-    rad = math.radians(tilt_deg)
-    c, s = math.cos(rad), math.sin(rad)
-    R = np.array([[c, s], [-s, c]])  # clockwise
-    pts = (local @ R.T) + np.array([cx, cy])
-    mask = np.zeros(shape, np.uint8)
-    cv2.fillConvexPoly(mask, pts.astype(np.int32), 255)
-    if dilate > 0:
-        mask = cv2.dilate(mask, np.ones((dilate, dilate), np.uint8), iterations=1)
-    return mask
-
-
-def heal_region(bgr: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    """Fill text region by lerping left/right holographic flanks (no Telea letter revive)."""
-    if mask.max() == 0:
-        return bgr
-    out = bgr.copy()
-    core = cv2.dilate(mask, np.ones((11, 11), np.uint8), iterations=2)
-    h, w = core.shape
-    ys, xs = np.where(core > 0)
+    """
+    For each column, lerp between clean pixels ABOVE and BELOW the mask
+    (sampled outside the mask, not from glyph edges). Matched noise + light blur.
+    """
+    out = img.copy()
+    h, w = mask.shape
+    ys, xs = np.where(mask > 0)
     if len(xs) == 0:
         return out
-    y0, y1 = int(ys.min()), int(ys.max())
-    rng = np.random.default_rng(42)
+    x0, x1 = int(xs.min()), int(xs.max())
+    rng = np.random.default_rng(7)
+    src = img  # always sample from pre-edit pixels
 
-    def sample(y: int, x: int) -> np.ndarray:
-        yy0, yy1 = max(0, y - 2), min(h, y + 3)
-        xx0, xx1 = max(0, x - 2), min(w, x + 3)
-        patch = out[yy0:yy1, xx0:xx1]
-        return patch.reshape(-1, 3).mean(axis=0)
-
-    for y in range(y0, y1 + 1):
-        cols = np.where(core[y] > 0)[0]
+    for x in range(x0, x1 + 1):
+        cols = np.where(mask[:, x] > 0)[0]
         if len(cols) == 0:
             continue
-        L, R = int(cols[0]), int(cols[-1])
-        lx = L - 1
-        while lx > 0 and core[y, lx] > 0:
-            lx -= 1
-        rx = R + 1
-        while rx < w - 1 and core[y, rx] > 0:
-            rx += 1
-        left_c = sample(y, max(0, lx - 10))
-        right_c = sample(y, min(w - 1, rx + 10))
-        for x in cols:
-            t = 0.0 if R == L else (x - L) / (R - L)
-            col = left_c * (1 - t) + right_c * t
-            noise = rng.normal(0, 2.2, 3)
+        y_top, y_bot = int(cols[0]), int(cols[-1])
+        ya = max(0, y_top - sample_pad)
+        yb = min(h - 1, y_bot + sample_pad)
+        # Ensure samples are outside mask
+        while ya > 0 and mask[ya, x] > 0:
+            ya -= 1
+        while yb < h - 1 and mask[yb, x] > 0:
+            yb += 1
+
+        def samp(y: int) -> np.ndarray:
+            yy0, yy1 = max(0, y - 1), min(h, y + 2)
+            xx0, xx1 = max(0, x - 1), min(w, x + 2)
+            return src[yy0:yy1, xx0:xx1].reshape(-1, 3).mean(axis=0)
+
+        above = samp(ya)
+        below = samp(yb)
+        span = max(1, y_bot - y_top)
+        for y in cols:
+            t = (y - y_top) / span
+            # Ease endpoints toward the nearer clean sample
+            col = above * (1.0 - t) + below * t
+            noise = rng.normal(0, 1.4, 3)
             out[y, x] = np.clip(col + noise, 0, 255)
 
-    feather = cv2.GaussianBlur(core, (0, 0), 2.5)
-    blur = cv2.GaussianBlur(out, (0, 0), 1.6)
+    blur = cv2.GaussianBlur(out, (0, 0), 0.85)
+    feather = cv2.GaussianBlur(mask, (0, 0), 1.0)
     m = (feather.astype(np.float32) / 255.0)[..., None]
-    out = (blur * m + out * (1 - m)).astype(np.uint8)
+    blended = (blur.astype(np.float32) * m + out.astype(np.float32) * (1.0 - m)).astype(
+        np.uint8
+    )
+    blended[mask == 0] = img[mask == 0]
+    return blended
+
+
+def fill_photo_window(
+    img: np.ndarray, x0: int, y0: int, x1: int, y1: int, inset: int = 4
+) -> np.ndarray:
+    """Fill photo interior with light lavender gradient; keep white border."""
+    out = img.copy()
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # Interior = everything inside the bright border ring (not the border itself)
+    roi = gray[y0:y1, x0:x1]
+    border = (roi > 200).astype(np.uint8) * 255
+    border = cv2.morphologyEx(border, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    # Shrink border to get interior; also force a rounded rect fallback
+    interior = np.zeros_like(border)
+    # Seed fill from center for pixels that are NOT bright border
+    h_r, w_r = roi.shape
+    seed = (w_r // 2, h_r // 2)
+    flood = border.copy()
+    # Invert: non-border becomes fillable; protect actual white border
+    fillable = np.where(border > 0, 0, 255).astype(np.uint8)
+    # Also treat near-white chrome just inside as border (2px)
+    fillable = cv2.erode(fillable, np.ones((3, 3), np.uint8), iterations=1)
+    mask_ff = np.zeros((h_r + 2, w_r + 2), np.uint8)
+    ff = fillable.copy()
+    cv2.floodFill(ff, mask_ff, seed, 128)
+    interior = (ff == 128).astype(np.uint8) * 255
+    if interior.sum() < 1000:
+        # Fallback rounded rect
+        ix0, iy0 = inset, inset
+        ix1, iy1 = w_r - inset, h_r - inset
+        radius = 18
+        cv2.rectangle(interior, (ix0 + radius, iy0), (ix1 - radius, iy1), 255, -1)
+        cv2.rectangle(interior, (ix0, iy0 + radius), (ix1, iy1 - radius), 255, -1)
+        for ccx, ccy in (
+            (ix0 + radius, iy0 + radius),
+            (ix1 - radius, iy0 + radius),
+            (ix0 + radius, iy1 - radius),
+            (ix1 - radius, iy1 - radius),
+        ):
+            cv2.circle(interior, (ccx, ccy), radius, 255, -1)
+
+    # #ECE8F2 → #D9D4E3 in BGR
+    c0 = np.array([0xF2, 0xE8, 0xEC], dtype=np.float32)
+    c1 = np.array([0xE3, 0xD4, 0xD9], dtype=np.float32)
+
+    hh, ww = h_r, w_r
+    grad = np.zeros((hh, ww, 3), np.float32)
+    for i in range(hh):
+        t = i / max(1, hh - 1)
+        row = c0 * (1 - t) + c1 * t
+        grad[i, :] = row
+    yy, xx = np.mgrid[0:hh, 0:ww]
+    nx = (xx / max(1, ww - 1) - 0.5) * 2
+    ny = (yy / max(1, hh - 1) - 0.5) * 2
+    r = np.clip(np.sqrt(nx * nx + ny * ny), 0, 1)[..., None]
+    grad = grad * (1 - 0.05 * r) + c1 * (0.05 * r)
+    rng = np.random.default_rng(3)
+    grad = np.clip(grad + rng.normal(0, 1.6, grad.shape), 0, 255)
+
+    patch = out[y0:y1, x0:x1]
+    local = interior > 0
+    patch[local] = grad.astype(np.uint8)[local]
+    out[y0:y1, x0:x1] = patch
     return out
+
+
+def detect_name_mask(gray: np.ndarray, px0: int, py1: int, px1: int) -> np.ndarray:
+    """
+    Tight solid rect covering only HANA TADESSE (glyphs + soft shadow).
+    Stops well above VIBE BUILDER (~py1+120).
+    """
+    y0 = py1 + 16
+    y1 = py1 + 100  # hard stop before VIBE BUILDER (~py1+120)
+    x0 = px0 - 30
+    x1 = px1 + 30
+    band = gray[y0:y1, x0:x1]
+
+    # Bright glyphs
+    bright = (band > 205).astype(np.uint8) * 255
+    bright = cv2.morphologyEx(bright, cv2.MORPH_CLOSE, np.ones((5, 9), np.uint8))
+    bright = cv2.dilate(bright, np.ones((3, 3), np.uint8), iterations=1)
+
+    # Soft purple shadow under/around letters (slightly darker than local holo)
+    blur = cv2.GaussianBlur(band, (0, 0), 3.0)
+    shadow = ((blur.astype(np.float32) - band.astype(np.float32) > 8) & (band < 170)).astype(
+        np.uint8
+    ) * 255
+    shadow = cv2.morphologyEx(shadow, cv2.MORPH_CLOSE, np.ones((3, 5), np.uint8))
+
+    m = cv2.bitwise_or(bright, shadow)
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(m)
+    cleaned = np.zeros_like(m)
+    for i in range(1, n):
+        area = stats[i, cv2.CC_STAT_AREA]
+        bh = stats[i, cv2.CC_STAT_HEIGHT]
+        bw = stats[i, cv2.CC_STAT_WIDTH]
+        if area >= 30 and bh >= 8 and bw >= 3:
+            cleaned[labels == i] = 255
+
+    ys, xs = np.where(cleaned > 0)
+    full = np.zeros_like(gray, np.uint8)
+    if len(xs) == 0:
+        # Fallback fixed slot between photo and vibe
+        cv2.rectangle(full, (px0 + 20, py1 + 22), (px1 - 20, py1 + 78), 255, -1)
+        return full
+
+    bx0, bx1 = int(xs.min()), int(xs.max())
+    by0, by1 = int(ys.min()), int(ys.max())
+    # Hard stop well above VIBE BUILDER (~py1+118 / absolute ~830)
+    max_by1 = (py1 + 96) - y0
+    by1 = min(by1, max_by1)
+    pad_x, pad_top, pad_bot = 8, 4, 4
+    rect = np.zeros_like(cleaned)
+    cv2.rectangle(
+        rect,
+        (max(0, bx0 - pad_x), max(0, by0 - pad_top)),
+        (min(cleaned.shape[1] - 1, bx1 + pad_x), min(cleaned.shape[0] - 1, by1 + pad_bot)),
+        255,
+        -1,
+    )
+    full[y0:y1, x0:x1] = rect
+    return full
+
+
+def detect_event_mask(gray: np.ndarray, px0: int, py1: int, px1: int) -> tuple[np.ndarray, dict]:
+    """
+    Mask the whole 'Wolkite University · Nov 20–22' run.
+    Keep calendar icon (left). Returns mask + geometry for re-render.
+    """
+    # Full text height measured ~py1+191 .. py1+229
+    y0 = py1 + 185
+    y1 = py1 + 235
+    x0 = px0 - 80
+    x1 = px1 + 50
+    band = gray[y0:y1, x0:x1]
+
+    dark = (band < 100).astype(np.uint8) * 255
+    dark = cv2.morphologyEx(dark, cv2.MORPH_CLOSE, np.ones((3, 7), np.uint8))
+    dark = cv2.dilate(dark, np.ones((3, 3), np.uint8), iterations=1)
+
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(dark)
+    full = np.zeros_like(gray, np.uint8)
+    geo: dict = {}
+    if n <= 1:
+        return full, geo
+
+    comps = []
+    for i in range(1, n):
+        comps.append(
+            (
+                int(stats[i, cv2.CC_STAT_LEFT]),
+                int(stats[i, cv2.CC_STAT_TOP]),
+                int(stats[i, cv2.CC_STAT_WIDTH]),
+                int(stats[i, cv2.CC_STAT_HEIGHT]),
+                int(stats[i, cv2.CC_STAT_AREA]),
+                i,
+            )
+        )
+    comps.sort()
+
+    # Calendar icon = leftmost compact blob (taller than wide-ish, small)
+    icon = comps[0]
+    icon_right = icon[0] + icon[2]
+
+    text_comps = [c for c in comps[1:] if c[0] >= icon_right - 4 and c[4] >= 15]
+    if not text_comps:
+        text_comps = [c for c in comps if c[0] > icon_right + 4]
+
+    cleaned = np.zeros_like(dark)
+    for c in text_comps:
+        cleaned[labels == c[5]] = 255
+
+    ys, xs = np.where(cleaned > 0)
+    if len(xs) == 0:
+        return full, geo
+
+    bx0, bx1 = int(xs.min()), int(xs.max())
+    by0, by1 = int(ys.min()), int(ys.max())
+    # Start after calendar with a small gap; keep right edge tight to glyphs
+    bx0 = max(bx0, icon_right + 4)
+    rect = np.zeros_like(cleaned)
+    cv2.rectangle(
+        rect,
+        (max(0, bx0 - 2), max(0, by0 - 3)),
+        (min(cleaned.shape[1] - 1, bx1 + 3), min(cleaned.shape[0] - 1, by1 + 3)),
+        255,
+        -1,
+    )
+    # Do not cover calendar
+    rect[:, : max(0, icon_right + 2)] = 0
+    full[y0:y1, x0:x1] = rect
+
+    geo = {
+        "uprightCenter": [float(x0 + (bx0 + bx1) / 2), float(y0 + (by0 + by1) / 2)],
+        "uprightWidth": float(bx1 - bx0 + 8),
+        "uprightHeight": float(by1 - by0 + 6),
+        # Cap-height ≈ rendered px; Poppins 600 needs ~0.55–0.6 of bbox height as fontSize? use bbox h
+        "fontSize": float(max(22, min(28, by1 - by0 + 2))),
+    }
+    return full, geo
+
+
+def badge_mask_upright(h: int, w: int, px0: int, py0: int, px1: int, py1: int):
+    """Axis-aligned rounded rect covering the badge body in upright space."""
+    bw = px1 - px0
+    bh = py1 - py0
+    left = int(round(px0 - bw * 0.215))
+    right = int(round(px1 + bw * 0.215))
+    top = int(round(py0 - bh * 0.42))
+    bottom = int(round(py1 + bh * 0.86))
+    left, top = max(0, left), max(0, top)
+    right, bottom = min(w - 1, right), min(h - 1, bottom)
+    mask = np.zeros((h, w), np.uint8)
+    radius = 36
+    cv2.rectangle(mask, (left + radius, top), (right - radius, bottom), 255, -1)
+    cv2.rectangle(mask, (left, top + radius), (right, bottom - radius), 255, -1)
+    for cx, cy in (
+        (left + radius, top + radius),
+        (right - radius, top + radius),
+        (left + radius, bottom - radius),
+        (right - radius, bottom - radius),
+    ):
+        cv2.circle(mask, (cx, cy), radius, 255, -1)
+    return mask, (left, top, right, bottom)
 
 
 def main() -> None:
-    src = find_source()
-    print("source:", src)
-    bgr = cv2.imread(str(src), cv2.IMREAD_COLOR)
-    if bgr is None:
-        raise SystemExit(f"failed to read {src}")
+    src_path = find_source()
+    print("source:", src_path)
+    bgr = cv2.imread(str(src_path), cv2.IMREAD_COLOR)
+    assert bgr is not None
     h, w = bgr.shape[:2]
-    assert (w, h) == (1080, 1440), f"expected 1080x1440, got {w}x{h}"
+    assert (w, h) == (1080, 1440)
 
-    # Cache source next to output for reproducibility
     cached = ROOT / "public" / "template" / "final-badge-v2-source.png"
     cached.parent.mkdir(parents=True, exist_ok=True)
-    if src.resolve() != cached.resolve():
-        cached.write_bytes(src.read_bytes())
+    if src_path.resolve() != cached.resolve():
+        cached.write_bytes(src_path.read_bytes())
 
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-    corners, tilt_deg, center = detect_photo_window(gray)
-    print(f"photo tilt: {tilt_deg:.3f}° clockwise")
-    print("photo corners TL,TR,BR,BL:\n", corners)
+    photo_corners, tilt = detect_photo_window(gray)
+    print(f"tilt: {tilt:.4f}° clockwise")
 
-    # 1) Clear sample person
-    out = clear_photo_window(bgr, corners)
+    cx, cy = photo_corners.mean(axis=0)
+    M_forward = rot_matrix(float(cx), float(cy), tilt)
+    M_back = rot_matrix(float(cx), float(cy), -tilt)
 
-    # 2) Heal name — band between photo bottom and VIBE BUILDER (incl. glow)
-    photo_mask = np.zeros_like(gray)
-    cv2.fillConvexPoly(photo_mask, inset_quad(corners, 4).astype(np.int32), 255)
-    role_protect = rotated_band_mask(
-        gray.shape, center=(540, 820), width=420, height=36, tilt_deg=tilt_deg, dilate=2
+    upright = cv2.warpAffine(
+        bgr, M_forward, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE
     )
-    name_mask = rotated_band_mask(
-        gray.shape, center=(540, 752), width=600, height=100, tilt_deg=tilt_deg, dilate=10
-    )
-    name_mask = cv2.bitwise_and(name_mask, cv2.bitwise_not(photo_mask))
-    name_mask = cv2.bitwise_and(name_mask, cv2.bitwise_not(role_protect))
+    ugray = cv2.cvtColor(upright, cv2.COLOR_BGR2GRAY)
+    photo_u = transform_pts(M_forward, photo_corners)
+    px0 = int(round(min(photo_u[:, 0])))
+    px1 = int(round(max(photo_u[:, 0])))
+    py0 = int(round(min(photo_u[:, 1])))
+    py1 = int(round(max(photo_u[:, 1])))
+    print(f"photo upright: ({px0},{py0})-({px1},{py1})")
+
+    badge_mask_u, badge_box = badge_mask_upright(h, w, px0, py0, px1, py1)
+    print("badge upright box", badge_box)
+
+    edited = upright.copy()
+
+    # --- Photo window ---
+    before_photo = edited.copy()
+    edited = fill_photo_window(edited, px0, py0, px1, py1, inset=4)
+    photo_edit = (
+        cv2.absdiff(edited, before_photo).max(axis=2) > 0
+    ).astype(np.uint8) * 255
+
+    # --- Name ---
+    name_mask = detect_name_mask(ugray, px0, py1, px1)
+    name_mask = cv2.bitwise_and(name_mask, badge_mask_u)
     print("name mask px", int(name_mask.sum() / 255))
-    out = heal_region(out, name_mask)
+    nys, nxs = np.where(name_mask > 0)
+    if len(nxs):
+        print(
+            "name mask bbox",
+            int(nxs.min()),
+            int(nys.min()),
+            int(nxs.max()),
+            int(nys.max()),
+        )
+    edited = column_blend_fill(edited, name_mask, sample_pad=12)
 
-    # 3) Heal full event line text (university + date). Keep calendar icon.
-    uni_mask = rotated_band_mask(
-        gray.shape, center=(575, 890), width=540, height=48, tilt_deg=tilt_deg, dilate=8
-    )
-    icon_protect = rotated_band_mask(
-        gray.shape, center=(300, 878), width=70, height=44, tilt_deg=tilt_deg, dilate=2
-    )
-    uni_mask = cv2.bitwise_and(uni_mask, cv2.bitwise_not(icon_protect))
-    print("uni/date mask px", int(uni_mask.sum() / 255))
-    out = heal_region(out, uni_mask)
+    # --- Event line text (keep calendar) ---
+    event_mask, event_geo = detect_event_mask(ugray, px0, py1, px1)
+    event_mask = cv2.bitwise_and(event_mask, badge_mask_u)
+    print("event mask px", int(event_mask.sum() / 255))
+    eys, exs = np.where(event_mask > 0)
+    if len(exs):
+        print(
+            "event mask bbox",
+            int(exs.min()),
+            int(eys.min()),
+            int(exs.max()),
+            int(eys.max()),
+        )
+    edited = column_blend_fill(edited, event_mask, sample_pad=10)
 
+    edit_u = cv2.bitwise_or(photo_edit, cv2.bitwise_or(name_mask, event_mask))
+    edit_u = cv2.bitwise_and(edit_u, badge_mask_u)
+    # Tiny dilate for warp interpolation; keep clear of VIBE BUILDER band
+    edit_u = cv2.dilate(edit_u, np.ones((2, 2), np.uint8), iterations=1)
+    edit_u = cv2.bitwise_and(edit_u, badge_mask_u)
+    # Never edit the VIBE BUILDER strip in upright space
+    vibe_top = py1 + 105
+    vibe_bot = py1 + 175
+    edit_u[vibe_top:vibe_bot, :] = 0
+    edited[vibe_top:vibe_bot, :] = upright[vibe_top:vibe_bot, :]
+
+    edited_back = cv2.warpAffine(
+        edited, M_back, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE
+    )
+    edit_mask_orig = cv2.warpAffine(
+        edit_u, M_back, (w, h), flags=cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT
+    )
+    badge_mask_orig = cv2.warpAffine(
+        badge_mask_u,
+        M_back,
+        (w, h),
+        flags=cv2.INTER_NEAREST,
+        borderMode=cv2.BORDER_CONSTANT,
+    )
+    apply = (edit_mask_orig > 0) & (badge_mask_orig > 0)
+
+    out = bgr.copy()
+    out[apply] = edited_back[apply]
+
+    outside = badge_mask_orig == 0
+    diff_outside = np.abs(out.astype(np.int16) - bgr.astype(np.int16))[outside]
+    max_out = int(diff_outside.max()) if diff_outside.size else 0
+    print(f"outside-badge max abs diff: {max_out}")
+    if max_out != 0:
+        out[outside] = bgr[outside]
+        print("forced outside pixels to source")
+
+    # Hard guarantee
+    out[outside] = bgr[outside]
+
+    diff = cv2.absdiff(out, bgr)
+    diff_vis = np.clip(diff.sum(axis=2) * 3, 0, 255).astype(np.uint8)
+    diff_rgb = cv2.cvtColor(diff_vis, cv2.COLOR_GRAY2BGR)
+    diff_rgb[outside] = (0, 0, 0)
+    DIFF_OUT.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(DIFF_OUT), diff_rgb)
     cv2.imwrite(str(OUT), out, [cv2.IMWRITE_PNG_COMPRESSION, 3])
+    # Also copy template into artifacts
+    cv2.imwrite(str(DIFF_OUT.parent / "badge-template.png"), out, [cv2.IMWRITE_PNG_COMPRESSION, 3])
     print("wrote", OUT)
+    print("wrote", DIFF_OUT)
 
-    # Geometry for the canvas app (photo window in template space)
-    tl, tr, br, bl = corners.tolist()
-    # Inner clip rect in unrotated badge-local coords: width/height along edges
-    width = float(np.linalg.norm(np.array(tr) - np.array(tl)))
-    height = float(np.linalg.norm(np.array(bl) - np.array(tl)))
+    nys, nxs = np.where(name_mask > 0)
+    if len(nxs):
+        name_u_c = np.array([[nxs.mean(), nys.mean()]], dtype=np.float64)
+        name_h = float(nys.max() - nys.min() + 1)
+    else:
+        name_u_c = np.array([[(px0 + px1) / 2, py1 + 48]], dtype=np.float64)
+        name_h = 52.0
+    name_c = transform_pts(M_back, name_u_c)[0]
+
+    if event_geo:
+        ev_u = np.array([event_geo["uprightCenter"]], dtype=np.float64)
+        ev_c = transform_pts(M_back, ev_u)[0]
+        ev_w = event_geo["uprightWidth"]
+        ev_size = event_geo["fontSize"]
+    else:
+        ev_c = np.array([560.0, 920.0])
+        ev_w = 420.0
+        ev_size = 24.0
+
+    tl, tr, br, bl = photo_corners
+    pw = float(np.linalg.norm(tr - tl))
+    ph = float(np.linalg.norm(bl - tl))
+    # Cap-height of HANA TADESSE ≈ 60px; Anton renders caps ≈ fontSize
+    name_font = int(round(max(58, min(70, name_h * 0.95))))
+
+    # Prefer bbox centers measured on the source (stable vs mask padding)
+    gsrc = gray
+    nb = gsrc[735:795, 280:800]
+    bright = (nb > 215).astype(np.uint8) * 255
+    bright = cv2.morphologyEx(bright, cv2.MORPH_CLOSE, np.ones((3, 5), np.uint8))
+    nys_s, nxs_s = np.where(bright > 0)
+    if len(nxs_s):
+        name_c = np.array(
+            [(nxs_s.min() + nxs_s.max()) / 2 + 280, (nys_s.min() + nys_s.max()) / 2 + 735],
+            dtype=np.float64,
+        )
+        name_font = int(round(max(58, min(70, (nys_s.max() - nys_s.min() + 1) * 1.05))))
+
+    eb = gsrc[900:945, 360:750]
+    ed = (eb < 90).astype(np.uint8) * 255
+    eys_s, exs_s = np.where(ed > 0)
+    if len(exs_s):
+        ev_c = np.array(
+            [(exs_s.min() + exs_s.max()) / 2 + 360, (eys_s.min() + eys_s.max()) / 2 + 900],
+            dtype=np.float64,
+        )
+        ev_w = float(exs_s.max() - exs_s.min() + 8)
+        ev_size = float(max(22, min(28, eys_s.max() - eys_s.min() + 2)))
+
     meta = {
         "canvas": {"width": 1080, "height": 1440},
-        "tiltDegClockwise": round(tilt_deg, 4),
+        "tiltDegClockwise": round(tilt, 4),
         "photoWindow": {
-            "center": [round(center[0], 2), round(center[1], 2)],
-            "width": round(width, 2),
-            "height": round(height, 2),
+            "center": [round(float(cx), 2), round(float(cy), 2)],
+            "width": round(pw, 2),
+            "height": round(ph, 2),
             "corners": {
-                "tl": [round(tl[0], 2), round(tl[1], 2)],
-                "tr": [round(tr[0], 2), round(tr[1], 2)],
-                "br": [round(br[0], 2), round(br[1], 2)],
-                "bl": [round(bl[0], 2), round(bl[1], 2)],
+                "tl": [round(float(tl[0]), 2), round(float(tl[1]), 2)],
+                "tr": [round(float(tr[0]), 2), round(float(tr[1]), 2)],
+                "br": [round(float(br[0]), 2), round(float(br[1]), 2)],
+                "bl": [round(float(bl[0]), 2), round(float(bl[1]), 2)],
             },
-            # Soft light fill used when clearing the sample photo
-            "backdropRgb": list(sample_backdrop(bgr, corners)),
+            "radius": 26,
         },
-        # Name baseline center (approx where HANA TADESSE sat)
         "name": {
-            "center": [540, 760],
+            "center": [round(float(name_c[0]), 2), round(float(name_c[1]), 2)],
             "maxWidth": 520,
-            "fontSize": 64,
+            "fontSize": name_font,
         },
-        # Event line (university · dates) — to the right of calendar icon
         "eventLine": {
-            "center": [560, 888],
-            "maxWidth": 480,
-            "fontSize": 22,
+            "center": [round(float(ev_c[0]), 2), round(float(ev_c[1]), 2)],
+            "maxWidth": round(float(ev_w + 40), 1),
+            "fontSize": round(float(ev_size), 1),
         },
         "dates": "Nov 20–22",
+        "outsideBadgeMaxDiff": 0,
     }
     META.write_text(json.dumps(meta, indent=2) + "\n")
     print("wrote", META)
+
+    assert np.array_equal(out[outside], bgr[outside]), "outside-badge pixels changed!"
+
+    # Residual QA
+    og = cv2.cvtColor(out, cv2.COLOR_BGR2GRAY)
+    if len(nxs):
+        zone = og[int(nys.min()) : int(nys.max()) + 1, int(nxs.min()) : int(nxs.max()) + 1]
+        # Map upright zone roughly via center — use original-space name neighborhood
+        ny0o = max(0, int(name_c[1] - 40))
+        ny1o = min(h, int(name_c[1] + 40))
+        nx0o = max(0, int(name_c[0] - 260))
+        nx1o = min(w, int(name_c[0] + 260))
+        z = og[ny0o:ny1o, nx0o:nx1o]
+        print("residual name >220 in slot:", int((z > 220).sum()))
+    if event_geo:
+        ey0o = max(0, int(ev_c[1] - 25))
+        ey1o = min(h, int(ev_c[1] + 25))
+        ex0o = max(0, int(ev_c[0] - 220))
+        ex1o = min(w, int(ev_c[0] + 220))
+        ez = og[ey0o:ey1o, ex0o:ex1o]
+        print("residual event <70 in slot:", int((ez < 70).sum()))
 
 
 if __name__ == "__main__":

@@ -29,27 +29,24 @@
         691.43
       ]
     },
-    "backdropRgb": [
-      147,
-      129,
-      138
-    ]
+    "radius": 26
   },
   "name": {
     "center": [
-      540,
-      760
+      518.5,
+      764.5
     ],
     "maxWidth": 520,
-    "fontSize": 64
+    "fontSize": 63
   },
   "eventLine": {
     "center": [
-      560,
-      888
+      522.5,
+      922.0
     ],
-    "maxWidth": 480,
-    "fontSize": 22
+    "maxWidth": 373.0,
+    "fontSize": 28.0
   },
-  "dates": "Nov 20\u201322"
+  "dates": "Nov 20\u201322",
+  "outsideBadgeMaxDiff": 0
 }
