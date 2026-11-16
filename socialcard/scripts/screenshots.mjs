@@ -152,6 +152,7 @@ const browser = await chromium.launch({ headless: true })
 }
 
 // ——— Keyboard / reduced viewport 375×420 ———
+// Emulate the visual viewport height itself (not a huge inset on top of 420).
 {
   const context = await browser.newContext({
     viewport: { width: 375, height: 420 },
@@ -162,37 +163,14 @@ const browser = await chromium.launch({ headless: true })
   const page = await context.newPage()
   page.setDefaultTimeout(120_000)
   await loadCard(page, { name: 'Natnael' })
-  // Simulate visualViewport inset from iOS keyboard
-  await page.evaluate(() => {
-    const fakeHeight = 220
-    Object.defineProperty(window, 'visualViewport', {
-      configurable: true,
-      value: {
-        height: fakeHeight,
-        width: window.innerWidth,
-        offsetTop: 0,
-        offsetLeft: 0,
-        scale: 1,
-        addEventListener(type, fn) {
-          this._fns = this._fns || {}
-          ;(this._fns[type] ||= []).push(fn)
-        },
-        removeEventListener() {},
-        dispatchEvent() {},
-      },
-    })
-    window.dispatchEvent(new Event('resize'))
-    // Force React sync by focusing name (app listens to vv + focus)
-  })
   await page.getByPlaceholder('Hana Tadesse').focus()
-  await page.waitForTimeout(500)
-  // Manually set CSS var if React already mounted vv listener before our override
+  await page.waitForTimeout(400)
   await page.evaluate(() => {
-    const inset = Math.max(0, window.innerHeight - 220)
-    document.querySelector('.app')?.style.setProperty('--vv-bottom', `${inset}px`)
+    // Mild keyboard inset within this already-short viewport
+    document.querySelector('.app')?.style.setProperty('--vv-bottom', '0px')
     document.querySelector('.app')?.classList.add('app--typing', 'app--keyboard')
   })
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(350)
   await page.screenshot({
     path: path.join(OUT, 'mobile-375-keyboard.png'),
     fullPage: false,

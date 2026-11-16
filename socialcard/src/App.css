@@ -43,11 +43,11 @@
   }
 
   .app--typing {
-    --sheet-max: 156px;
+    --sheet-max: 148px;
   }
 
   .app--keyboard {
-    --sheet-max: 124px;
+    --sheet-max: 120px;
   }
 
   .app__header {
