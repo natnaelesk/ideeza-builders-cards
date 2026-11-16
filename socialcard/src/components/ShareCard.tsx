@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type Ref } from 'react'
 import { cardLayout } from '../config/cardLayout'
-import { fitFontSize } from '../lib/fitText'
+import { fitNameFontSize } from '../lib/fitText'
 import type { CardFormState } from '../types'
 import './ShareCard.css'
 
@@ -19,76 +19,70 @@ function abs(slot: { x: number; y: number; w: number; h: number }) {
   }
 }
 
-function PanelIcon() {
+function PhotoPlaceholder() {
   return (
-    <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden>
-      <rect x="4" y="6" width="28" height="24" rx="6" fill="#6a2ff0" />
+    <svg
+      className="share-card__photo-silhouette"
+      viewBox="0 0 200 200"
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id="phg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#d8c8ff" />
+          <stop offset="1" stopColor="#b89cff" />
+        </linearGradient>
+      </defs>
+      <circle cx="100" cy="100" r="100" fill="url(#phg)" />
+      <circle cx="100" cy="78" r="36" fill="#6a2ff0" opacity="0.55" />
       <path
-        d="M12 18h12M12 23h8"
-        stroke="#fff"
-        strokeWidth="2.5"
-        strokeLinecap="round"
+        d="M36 178c10-42 40-62 64-62s54 20 64 62"
+        fill="#6a2ff0"
+        opacity="0.55"
       />
-      <circle cx="18" cy="13" r="2.5" fill="#b9ff6a" />
     </svg>
   )
 }
 
 export function ShareCard({ state, cardRef, className }: ShareCardProps) {
   const layout = cardLayout
-  const day = layout.days[state.day]
   const uni = layout.university
   const { slots, colors, logos } = layout
 
   const nameEntered = state.name.trim()
-  const projectEntered = state.project.trim()
-  const pitchEntered = state.pitch.trim()
-  const name = nameEntered || day.defaultName
+  const name = nameEntered || 'Your Name'
   const nameIsPlaceholder = !nameEntered
-
-  const showProject = Boolean(projectEntered)
-  const showPitch = Boolean(pitchEntered)
-  const project =
-    projectEntered || (day.projectRequired ? day.defaultProject : '')
-  const pitch = pitchEntered || (day.projectRequired ? day.defaultPitch : '')
-  const projectIsPlaceholder = day.projectRequired && !projectEntered
-  const pitchIsPlaceholder = day.projectRequired && !pitchEntered
-  // Day 1 empty (and any empty state): keep frosted panel full with day context
-  const showFallbackSub =
-    !showProject && !showPitch && !day.projectRequired
-  const showRequiredPlaceholders =
-    day.projectRequired && !projectEntered && !pitchEntered
 
   const hasPhoto = Boolean(state.photoUrl)
   const t = state.photoTransform
   const posX = 50 + t.x
   const posY = 50 - t.y
 
-  const h1Ref = useRef<HTMLDivElement>(null)
-  const h2Ref = useRef<HTMLDivElement>(null)
-  const [h1Size, setH1Size] = useState(slots.headline.h1.fontSize)
-  const [h2Size, setH2Size] = useState(slots.headline.h2.fontSize)
+  const nameRef = useRef<HTMLDivElement>(null)
+  const [nameSize, setNameSize] = useState(slots.name.fontSize)
+  const [nameMultiline, setNameMultiline] = useState(false)
+
+  const eventPillText = `${layout.eventName} · ${uni.name} · ${uni.dates}`
 
   useLayoutEffect(() => {
-    setH1Size(fitFontSize(h1Ref.current, slots.headline.h1.fontSize, 34))
-    if (day.headline2.includes('\n')) {
-      setH2Size(slots.headline.h2.fontSize)
-    } else {
-      setH2Size(fitFontSize(h2Ref.current, slots.headline.h2.fontSize, 30))
-    }
-  }, [day.headline1, day.headline2, slots.headline.h1.fontSize, slots.headline.h2.fontSize])
+    const { size, multiline } = fitNameFontSize(
+      nameRef.current,
+      slots.name.fontSize,
+      36,
+    )
+    setNameSize(size)
+    setNameMultiline(multiline)
+  }, [name, slots.name.fontSize])
 
   return (
     <div
       ref={cardRef}
-      className={`share-card day-${state.day}${className ? ` ${className}` : ''}`}
+      className={`share-card${className ? ` ${className}` : ''}`}
       style={{
         width: layout.width,
         height: layout.height,
         fontFamily: layout.fontFamily,
         color: colors.navy,
       }}
-      data-day={state.day}
     >
       <div className="share-card__bg" aria-hidden>
         <svg
@@ -99,38 +93,38 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
           <defs>
             <linearGradient id="sw1" x1="0" y1="0" x2="1" y2="0.4">
               <stop offset="0" stopColor="#c9a8ff" stopOpacity="0" />
-              <stop offset="0.3" stopColor="#9a64ff" stopOpacity="0.5" />
-              <stop offset="0.7" stopColor="#d4b8ff" stopOpacity="0.38" />
+              <stop offset="0.3" stopColor="#9a64ff" stopOpacity="0.48" />
+              <stop offset="0.7" stopColor="#d4b8ff" stopOpacity="0.35" />
               <stop offset="1" stopColor="#7a3cf5" stopOpacity="0" />
             </linearGradient>
             <linearGradient id="sw2" x1="1" y1="0" x2="0" y2="1">
               <stop offset="0" stopColor="#e0c4ff" stopOpacity="0" />
-              <stop offset="0.35" stopColor="#b07bff" stopOpacity="0.42" />
+              <stop offset="0.35" stopColor="#b07bff" stopOpacity="0.4" />
               <stop offset="1" stopColor="#8b45ff" stopOpacity="0" />
             </linearGradient>
             <linearGradient id="sw3" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0" stopColor="#a878ff" stopOpacity="0" />
-              <stop offset="0.4" stopColor="#8b45ff" stopOpacity="0.55" />
-              <stop offset="0.75" stopColor="#d4b8ff" stopOpacity="0.4" />
+              <stop offset="0.35" stopColor="#8b45ff" stopOpacity="0.58" />
+              <stop offset="0.7" stopColor="#d4b8ff" stopOpacity="0.42" />
               <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
             </linearGradient>
           </defs>
           <path
-            d="M-40 140 C 200 40, 420 240, 640 120 S 980 20, 1120 100"
+            d="M-40 120 C 200 30, 420 220, 640 100 S 980 10, 1120 90"
             fill="none"
             stroke="url(#sw1)"
             strokeWidth="110"
             strokeLinecap="round"
           />
           <path
-            d="M-60 780 C 180 700, 420 860, 680 760 S 980 680, 1140 760"
+            d="M-60 820 C 200 740, 420 900, 680 800 S 980 720, 1140 800"
             fill="none"
             stroke="url(#sw3)"
-            strokeWidth="90"
+            strokeWidth="100"
             strokeLinecap="round"
           />
           <path
-            d="M-40 1180 C 220 1060, 480 1280, 720 1140 S 1020 1040, 1140 1180"
+            d="M-40 1200 C 220 1080, 480 1300, 720 1160 S 1020 1060, 1140 1200"
             fill="none"
             stroke="url(#sw2)"
             strokeWidth="130"
@@ -139,7 +133,6 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
         </svg>
       </div>
 
-      {/* Top logos */}
       <div className="share-card__top-logos" style={abs(slots.topLogos)}>
         <img
           src={logos.ideeza}
@@ -156,7 +149,6 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
         />
       </div>
 
-      {/* Tour pill */}
       <div
         className="share-card__tour-pill"
         style={{
@@ -173,112 +165,7 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
         <span>{layout.tourLabel}</span>
       </div>
 
-      {/* Headline block */}
-      <div
-        className="share-card__headline"
-        style={{
-          left: slots.headline.x,
-          top: slots.headline.y,
-          width: slots.headline.w,
-        }}
-      >
-        <div
-          ref={h1Ref}
-          className="share-card__h1"
-          style={{
-            fontFamily: slots.headline.h1.fontFamily,
-            fontSize: h1Size,
-            fontWeight: slots.headline.h1.fontWeight,
-            fontStyle: slots.headline.h1.fontStyle,
-            color: slots.headline.h1.color,
-            letterSpacing: slots.headline.h1.letterSpacing,
-            lineHeight: slots.headline.h1.lineHeight,
-            textTransform: slots.headline.h1.textTransform,
-          }}
-        >
-          {day.headline1}
-        </div>
-        <div
-          ref={h2Ref}
-          className="share-card__h2"
-          style={{
-            fontFamily: slots.headline.h2.fontFamily,
-            fontSize: h2Size,
-            fontWeight: slots.headline.h2.fontWeight,
-            fontStyle: slots.headline.h2.fontStyle,
-            letterSpacing: slots.headline.h2.letterSpacing,
-            lineHeight: slots.headline.h2.lineHeight,
-            textTransform: slots.headline.h2.textTransform,
-            backgroundImage: slots.headline.h2.gradient,
-            WebkitBackgroundClip: 'text',
-            backgroundClip: 'text',
-            color: 'transparent',
-          }}
-        >
-          {day.headline2}
-        </div>
-
-        <div className="share-card__uni-block">
-          <div
-            className="share-card__uni1"
-            style={{
-              fontFamily: slots.headline.uni1.fontFamily,
-              fontSize: slots.headline.uni1.fontSize,
-              fontWeight: slots.headline.uni1.fontWeight,
-              fontStyle: slots.headline.uni1.fontStyle,
-              color: slots.headline.uni1.color,
-              letterSpacing: slots.headline.uni1.letterSpacing,
-              lineHeight: slots.headline.uni1.lineHeight,
-              textTransform: slots.headline.uni1.textTransform,
-            }}
-          >
-            {uni.nameLines[0]}
-          </div>
-          <div
-            className="share-card__uni2"
-            style={{
-              fontFamily: slots.headline.uni2.fontFamily,
-              fontSize: slots.headline.uni2.fontSize,
-              fontWeight: slots.headline.uni2.fontWeight,
-              fontStyle: slots.headline.uni2.fontStyle,
-              letterSpacing: slots.headline.uni2.letterSpacing,
-              lineHeight: slots.headline.uni2.lineHeight,
-              textTransform: slots.headline.uni2.textTransform,
-              backgroundImage: slots.headline.uni2.gradient,
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              color: 'transparent',
-            }}
-          >
-            {uni.nameLines[1]}
-          </div>
-        </div>
-
-        <div
-          className="share-card__tagline"
-          style={{
-            fontFamily: slots.headline.tagline.fontFamily,
-            fontSize: slots.headline.tagline.fontSize,
-            fontWeight: slots.headline.tagline.fontWeight,
-            fontStyle: slots.headline.tagline.fontStyle,
-            color: slots.headline.tagline.color,
-          }}
-        >
-          {layout.tagline}
-        </div>
-        <div
-          className="share-card__kicker"
-          style={{
-            fontSize: slots.headline.kicker.fontSize,
-            fontWeight: slots.headline.kicker.fontWeight,
-            color: slots.headline.kicker.color,
-          }}
-        >
-          {day.kicker}
-        </div>
-      </div>
-
-      {/* Campus gate — blended, no hard box */}
+      {/* Soft campus gate backdrop */}
       <div className="share-card__gate" style={abs(slots.gate)}>
         <img
           className="share-card__gate-img"
@@ -286,38 +173,16 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
           alt=""
           draggable={false}
         />
-        <div className="share-card__gate-fade" aria-hidden />
-        <svg
-          className="share-card__gate-swoosh"
-          viewBox="0 0 1000 120"
-          preserveAspectRatio="none"
-          aria-hidden
-        >
-          <defs>
-            <linearGradient id="gs" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stopColor="#a878ff" stopOpacity="0" />
-              <stop offset="0.35" stopColor="#8b45ff" stopOpacity="0.55" />
-              <stop offset="0.7" stopColor="#d4b8ff" stopOpacity="0.45" />
-              <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <path
-            d="M0 80 C 220 20, 420 110, 620 50 S 860 10, 1000 60"
-            fill="none"
-            stroke="url(#gs)"
-            strokeWidth="48"
-            strokeLinecap="round"
-          />
-        </svg>
+        <div className="share-card__gate-wash" aria-hidden />
       </div>
 
-      {/* Person photo — white + purple ring */}
+      {/* Hero portrait */}
       <div
         className="share-card__photo"
         style={{
           ...abs(slots.photo),
           borderWidth: slots.photo.borderWidth,
-          boxShadow: `0 0 0 ${slots.photo.ringWidth}px rgba(106, 47, 240, 0.55), 0 14px 32px rgba(60, 20, 140, 0.3)`,
+          boxShadow: `0 0 0 ${slots.photo.ringWidth}px #fff, 0 18px 48px rgba(60, 20, 140, 0.28)`,
         }}
       >
         {hasPhoto ? (
@@ -333,128 +198,105 @@ export function ShareCard({ state, cardRef, className }: ShareCardProps) {
             }}
           />
         ) : (
-          <div className="share-card__photo-ph">
-            <span>PHOTO</span>
-          </div>
+          <PhotoPlaceholder />
         )}
       </div>
 
-      {/* Dates + prize (poster stack) */}
+      {/* Swooshes crossing below the portrait */}
+      <svg
+        className="share-card__portrait-swoosh"
+        viewBox="0 0 1080 160"
+        preserveAspectRatio="none"
+        aria-hidden
+        style={{ top: slots.photo.y + slots.photo.h - 90 }}
+      >
+        <defs>
+          <linearGradient id="ps" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#a878ff" stopOpacity="0" />
+            <stop offset="0.3" stopColor="#8b45ff" stopOpacity="0.55" />
+            <stop offset="0.65" stopColor="#c9a8ff" stopOpacity="0.45" />
+            <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M0 100 C 220 30, 420 140, 640 70 S 900 20, 1080 90"
+          fill="none"
+          stroke="url(#ps)"
+          strokeWidth="56"
+          strokeLinecap="round"
+        />
+        <path
+          d="M0 120 C 260 60, 480 150, 720 90 S 940 50, 1080 110"
+          fill="none"
+          stroke="url(#ps)"
+          strokeWidth="28"
+          strokeLinecap="round"
+          opacity="0.7"
+        />
+      </svg>
+
       <div
-        className="share-card__dates-prize"
+        ref={nameRef}
+        className={`share-card__name${nameIsPlaceholder ? ' is-placeholder' : ''}${nameMultiline ? ' is-multiline' : ''}`}
         style={{
-          left: slots.datesPrize.x,
-          top: slots.datesPrize.y,
-          width: slots.datesPrize.w,
+          ...abs(slots.name),
+          fontFamily: slots.name.fontFamily,
+          fontSize: nameSize,
+          fontWeight: slots.name.fontWeight,
+          fontStyle: slots.name.fontStyle,
+          color: nameIsPlaceholder
+            ? 'rgba(18, 5, 46, 0.38)'
+            : slots.name.color,
+          letterSpacing: slots.name.letterSpacing,
+          lineHeight: slots.name.lineHeight,
+          textTransform: slots.name.textTransform,
         }}
       >
-        <div
-          className="share-card__dates"
-          style={{
-            fontFamily: slots.datesPrize.dates.fontFamily,
-            fontSize: slots.datesPrize.dates.fontSize,
-            fontWeight: slots.datesPrize.dates.fontWeight,
-            color: slots.datesPrize.dates.color,
-            letterSpacing: slots.datesPrize.dates.letterSpacing,
-          }}
-        >
-          {uni.datesShort}
-        </div>
-        <div
-          className="share-card__prize"
-          style={{
-            fontFamily: slots.datesPrize.prize.fontFamily,
-            fontSize: slots.datesPrize.prize.fontSize,
-            fontWeight: slots.datesPrize.prize.fontWeight,
-            fontStyle: slots.datesPrize.prize.fontStyle,
-            color: slots.datesPrize.prize.color,
-            letterSpacing: slots.datesPrize.prize.letterSpacing,
-          }}
-        >
-          {layout.prizeHeadline}
-        </div>
+        {name}
       </div>
 
-      {/* Frosted name / project panel */}
       <div
-        className="share-card__name-panel"
+        className="share-card__identity"
         style={{
-          ...abs(slots.namePanel),
-          height: slots.namePanel.h,
+          ...abs(slots.identity),
+          fontFamily: slots.identity.fontFamily,
+          fontSize: slots.identity.fontSize,
+          fontWeight: slots.identity.fontWeight,
+          color: slots.identity.color,
+          letterSpacing: slots.identity.letterSpacing,
         }}
       >
-        <div
-          className="share-card__panel-icon"
-          style={{
-            width: slots.namePanel.iconSize,
-            height: slots.namePanel.iconSize,
-          }}
-        >
-          <PanelIcon />
-        </div>
-        <div className="share-card__panel-txt">
-          <div
-            className={`share-card__name${nameIsPlaceholder ? ' is-placeholder' : ''}`}
-            style={{
-              fontSize: slots.namePanel.name.fontSize,
-              fontWeight: slots.namePanel.name.fontWeight,
-              color: nameIsPlaceholder
-                ? 'rgba(18, 5, 46, 0.38)'
-                : slots.namePanel.name.color,
-              letterSpacing: slots.namePanel.name.letterSpacing,
-              lineHeight: slots.namePanel.name.lineHeight,
-            }}
-          >
-            {name}
-          </div>
-          {(showProject || showRequiredPlaceholders) && project ? (
-            <div
-              className={`share-card__project${projectIsPlaceholder ? ' is-placeholder' : ''}`}
-              style={{
-                fontSize: slots.namePanel.project.fontSize,
-                fontWeight: slots.namePanel.project.fontWeight,
-                color: projectIsPlaceholder
-                  ? 'rgba(90, 31, 224, 0.4)'
-                  : slots.namePanel.project.color,
-                letterSpacing: slots.namePanel.project.letterSpacing,
-                lineHeight: slots.namePanel.project.lineHeight,
-              }}
-            >
-              {project}
-            </div>
-          ) : null}
-          {(showPitch || (showRequiredPlaceholders && pitch)) && pitch ? (
-            <div
-              className={`share-card__pitch${pitchIsPlaceholder ? ' is-placeholder' : ''}`}
-              style={{
-                fontSize: slots.namePanel.pitch.fontSize,
-                fontWeight: slots.namePanel.pitch.fontWeight,
-                color: pitchIsPlaceholder
-                  ? 'rgba(74, 58, 122, 0.45)'
-                  : slots.namePanel.pitch.color,
-                lineHeight: slots.namePanel.pitch.lineHeight,
-              }}
-            >
-              {pitch}
-            </div>
-          ) : null}
-          {showFallbackSub ? (
-            <div
-              className="share-card__pitch"
-              style={{
-                fontSize: slots.namePanel.pitch.fontSize,
-                fontWeight: 600,
-                color: slots.namePanel.pitch.color,
-                lineHeight: slots.namePanel.pitch.lineHeight,
-              }}
-            >
-              {day.emptyPanelSub}
-            </div>
-          ) : null}
-        </div>
+        {layout.identityLine}
       </div>
 
-      {/* Partner logos — no panel, sit on card */}
+      <div
+        className="share-card__event-pill"
+        style={{
+          ...abs(slots.eventPill),
+          fontSize: slots.eventPill.fontSize,
+          fontWeight: slots.eventPill.fontWeight,
+          color: slots.eventPill.color,
+          padding: `${slots.eventPill.paddingY}px ${slots.eventPill.paddingX}px`,
+        }}
+      >
+        {eventPillText}
+      </div>
+
+      <div
+        className="share-card__prize"
+        style={{
+          ...abs(slots.prize),
+          fontFamily: slots.prize.fontFamily,
+          fontSize: slots.prize.fontSize,
+          fontWeight: slots.prize.fontWeight,
+          fontStyle: slots.prize.fontStyle,
+          color: slots.prize.color,
+          letterSpacing: slots.prize.letterSpacing,
+        }}
+      >
+        {layout.prizeHeadline}
+      </div>
+
       <div className="share-card__logos" style={abs(slots.logoStrip)}>
         <div className="share-card__logo-cell">
           <img

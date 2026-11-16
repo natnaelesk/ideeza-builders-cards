@@ -1,11 +1,9 @@
-import type { DayId } from './config/cardLayout'
-
 /**
- * Photo pan/zoom inside the circular photo slot.
+ * Photo pan/zoom inside the circular portrait slot.
  *
  * x/y are pan offsets in the −50…50 range (percent of the slot).
  * Positive x pans toward the right edge of the source.
- * Positive y pans toward the top of the source.
+ * Positive y pans toward the top of the source (so max y reveals the head).
  *
  * Maps to CSS `object-position` / `transform-origin` — NOT translate —
  * so `object-fit: cover` keeps the slot filled while panning.
@@ -18,10 +16,7 @@ export interface PhotoTransform {
 }
 
 export interface CardFormState {
-  day: DayId
   name: string
-  project: string
-  pitch: string
   photoUrl: string | null
   photoTransform: PhotoTransform
 }

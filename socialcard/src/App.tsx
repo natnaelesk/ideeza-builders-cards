@@ -3,7 +3,7 @@ import { LinkedInIcon, XIcon } from './components/BrandIcons'
 import { ShareCard } from './components/ShareCard'
 import { ShareSheet } from './components/ShareSheet'
 import { Toast } from './components/Toast'
-import { cardLayout, DAY_ORDER, type DayId } from './config/cardLayout'
+import { cardLayout } from './config/cardLayout'
 import { modalCopy } from './config/shareText'
 import {
   canShareFiles,
@@ -41,10 +41,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
 
 export default function App() {
   const uni = cardLayout.university
-  const [day, setDay] = useState<DayId>('day1')
   const [name, setName] = useState('')
-  const [project, setProject] = useState('')
-  const [pitch, setPitch] = useState('')
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [photoTransform, setPhotoTransform] = useState<PhotoTransform>(
     defaultPhotoTransform,
@@ -60,8 +57,6 @@ export default function App() {
   const cardRef = useRef<HTMLDivElement>(null)
   const previewViewportRef = useRef<HTMLDivElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
-
-  const dayCfg = cardLayout.days[day]
 
   useEffect(() => {
     waitForFonts().then(() => setFontsReady(true))
@@ -82,16 +77,9 @@ export default function App() {
   }, [])
 
   const state: CardFormState = {
-    day,
     name,
-    project,
-    pitch,
     photoUrl,
     photoTransform,
-  }
-
-  const onDayChange = (next: DayId) => {
-    setDay(next)
   }
 
   const onPhotoChange = async (file: File | null) => {
@@ -104,7 +92,7 @@ export default function App() {
     setPhotoTransform(defaultPhotoTransform())
   }
 
-  const filename = `vibe-builders-${uni.id}-${day}-${(name || 'card')
+  const filename = `vibe-builders-${uni.id}-${(name || 'card')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
@@ -149,7 +137,7 @@ export default function App() {
       const dataUrl = await runExport()
       if (!dataUrl) return
       const file = await dataUrlToFile(dataUrl, filename)
-      const title = `My Vibe Builders ${dayCfg.pickerLabel} card — ${uni.name}`
+      const title = `My Vibe Builders card — ${uni.name}`
       const shared = await shareCardFile(file, title)
       if (shared) {
         setStatus('Shared!')
@@ -196,27 +184,10 @@ export default function App() {
         <div>
           <h1>Vibe Builders National Tour</h1>
           <p>
-            {uni.name} · {uni.dates} · share cards
+            {uni.name} · {uni.dates} · share card
           </p>
         </div>
       </header>
-
-      <section className="app__days" aria-label="Choose your day">
-        {DAY_ORDER.map((id) => {
-          const d = cardLayout.days[id]
-          return (
-            <button
-              key={id}
-              type="button"
-              className={`app__day${day === id ? ' is-active' : ''}`}
-              onClick={() => onDayChange(id)}
-            >
-              <span className="app__day-label">{d.pickerLabel}</span>
-              <span className="app__day-hint">{d.pickerHint}</span>
-            </button>
-          )
-        })}
-      </section>
 
       <div className="app__layout">
         <form
@@ -238,33 +209,7 @@ export default function App() {
           </label>
 
           <label className="field">
-            <span>
-              Project name
-              {!dayCfg.projectRequired ? ' (optional)' : ''}
-            </span>
-            <input
-              value={project}
-              onChange={(e) => setProject(e.target.value)}
-              placeholder="SoilSense"
-              maxLength={64}
-            />
-          </label>
-
-          <label className="field">
-            <span>
-              One-line pitch
-              {!dayCfg.projectRequired ? ' (optional)' : ''}
-            </span>
-            <input
-              value={pitch}
-              onChange={(e) => setPitch(e.target.value)}
-              placeholder="Moisture intel for small farms"
-              maxLength={100}
-            />
-          </label>
-
-          <label className="field">
-            <span>Your photo (optional)</span>
+            <span>Your photo</span>
             <input
               ref={photoInputRef}
               type="file"
@@ -420,12 +365,7 @@ export default function App() {
       {shareSheet && (
         <ShareSheet
           platform={shareSheet.platform}
-          fields={{
-            day,
-            name,
-            project,
-            pitch,
-          }}
+          fields={{ name }}
           imageDataUrl={shareSheet.imageDataUrl}
           filename={filename}
           onClose={() => setShareSheet(null)}

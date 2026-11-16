@@ -3,23 +3,14 @@
  * Vibe Builders National Tour — Social share post copy + modal UI strings
  * =============================================================================
  *
- * Edit this file to change LinkedIn / X post text, IDEEZA link block, and
- * share-sheet labels. Components only call builders / read `modalCopy`.
- *
- * Placeholders:
- *   {name}       — person name
- *   {project}    — project name
- *   {pitch}      — one-line pitch
- *   {university} — university name
- *   {dates}      — event dates
+ * Placeholders: {name}, {university}, {dates}, {event}, {prize}, {register}
  * =============================================================================
  */
 
-import { cardLayout, type DayId } from './cardLayout'
+import { cardLayout } from './cardLayout'
 
 export const REGISTER_URL = cardLayout.registerUrl
 export const X_CHAR_LIMIT = 280
-/** X counts every http(s) URL as this many characters (t.co). */
 export const X_URL_WEIGHT = 23
 
 export interface IdeezaLinkItem {
@@ -32,7 +23,6 @@ export interface IdeezaLinkGroup {
   items: IdeezaLinkItem[]
 }
 
-/** Same IDEEZA link block as the Builders' Lab root app. */
 export const IDEEZA_LINK_GROUPS: IdeezaLinkGroup[] = [
   {
     items: [{ label: '🌐 Website', url: 'https://www.ideeza.com/' }],
@@ -88,11 +78,7 @@ const HASHTAGS_SHORT = '#VibeBuilders #IDEEZA'
 const LI_TAGS = '@IDEEZA @Cheche Impact'
 
 export interface ShareFields {
-  day: DayId
   name: string
-  project: string
-  pitch: string
-  /** Defaults to config university when omitted */
   universityName?: string
   universityDates?: string
 }
@@ -136,10 +122,6 @@ function collapseSpaces(text: string): string {
     .trim()
 }
 
-/**
- * Weighted length for X: each http(s) URL = X_URL_WEIGHT; most emoji = 2;
- * other code points = 1.
- */
 export function xWeightedLength(text: string): number {
   const urlRe = /https?:\/\/[^\s]+/gi
   const urls = text.match(urlRe) ?? []
@@ -166,47 +148,32 @@ export function xWeightedLength(text: string): number {
 
 function uniFields(fields: ShareFields) {
   return {
+    name: fields.name.trim(),
     university: fields.universityName?.trim() || cardLayout.university.name,
     dates: fields.universityDates?.trim() || cardLayout.university.dates,
+    event: cardLayout.eventName,
+    prize: cardLayout.prizeHeadline,
+    register: REGISTER_URL,
   }
-}
-
-function dayOpenerLinkedIn(day: DayId, project: string): string {
-  if (day === 'day1') {
-    return 'I joined the Vibe Builders Workshop at the Vibe Builders National Tour! 🚀'
-  }
-  if (day === 'day2') {
-    return project
-      ? `I built ${project} at the IDEEZA Vibe Inventing Hackathon — Vibe Builders National Tour! 🚀`
-      : 'I built this at the IDEEZA Vibe Inventing Hackathon — Vibe Builders National Tour! 🚀'
-  }
-  // Day 3 — first-person for the poster owner
-  return project
-    ? `I built ${project} at the Code H.E.R Future Hackathon by Cheche Technologies, built with IDEEZA — Vibe Builders National Tour! 🚀`
-    : 'I built this at the Code H.E.R Future Hackathon by Cheche Technologies, built with IDEEZA — Vibe Builders National Tour! 🚀'
 }
 
 export function buildLinkedInPost(fields: ShareFields): string {
-  const name = fields.name.trim()
-  const project = fields.project.trim()
-  const pitch = fields.pitch.trim()
-  const { university, dates } = uniFields(fields)
+  const v = uniFields(fields)
+  const parts: string[] = [
+    `I'm a Vibe Builder at the ${v.event}, ${v.university}, ${v.dates}! 🚀`,
+  ]
 
-  const parts: string[] = [dayOpenerLinkedIn(fields.day, project)]
-
-  if (name || project || pitch) {
-    const detail = [name, project, pitch].filter(Boolean).join(' · ')
-    parts.push(`— ${detail}`)
+  if (v.name) {
+    parts.push(`— ${v.name}`)
   }
 
   parts.push(
     '',
-    `📍 ${university} · ${dates}`,
-    'IDEEZA × Cheche Impact × Zemenay Tech × INSA',
+    `Built with IDEEZA, with Cheche Impact. ${v.prize}.`,
     '',
     `${LI_TAGS}`,
     '',
-    `Register: ${REGISTER_URL}`,
+    `Register: ${v.register}`,
     '',
     formatIdeezaLinksBlock(),
     '',
@@ -216,84 +183,44 @@ export function buildLinkedInPost(fields: ShareFields): string {
   return collapseSpaces(parts.join('\n'))
 }
 
-type XTemplate = { withProject: string; withoutProject: string }
-
-const xByDay: Record<DayId, XTemplate> = {
-  day1: {
-    withProject:
-      'I joined the Vibe Builders Workshop at {university} ({dates}) — Vibe Builders National Tour with IDEEZA & Cheche. {project} Register: {register} {hashtags}',
-    withoutProject:
-      'I joined the Vibe Builders Workshop at {university} ({dates}) — Vibe Builders National Tour with IDEEZA & Cheche. Register: {register} {hashtags}',
-  },
-  day2: {
-    withProject:
-      'I built {project} at the IDEEZA Vibe Inventing Hackathon — {university}, Vibe Builders National Tour with IDEEZA & Cheche. Register: {register} {hashtags}',
-    withoutProject:
-      'I built this at the IDEEZA Vibe Inventing Hackathon — {university}, Vibe Builders National Tour with IDEEZA & Cheche. Register: {register} {hashtags}',
-  },
-  day3: {
-    withProject:
-      'I built {project} at the Code H.E.R Future Hackathon by Cheche Technologies, built with IDEEZA — {university}, Vibe Builders National Tour. Register: {register} {hashtags}',
-    withoutProject:
-      'I built this at the Code H.E.R Future Hackathon by Cheche Technologies, built with IDEEZA — {university}, Vibe Builders National Tour. Register: {register} {hashtags}',
-  },
-}
-
 /**
- * Build an X post ≤ 280 weighted chars. Trims `{project}` then drops a hashtag
- * if still over. Full IDEEZA links live in the X modal's separate box.
+ * X post ≤ 280 weighted chars. Trims `{name}` then drops a hashtag if needed.
  */
 export function buildXPost(fields: ShareFields): string {
-  const project = fields.project.trim()
-  const { university, dates } = uniFields(fields)
-  const tpl = xByDay[fields.day]
-  const baseTpl = project ? tpl.withProject : tpl.withoutProject
+  const v = uniFields(fields)
 
-  const tryBuild = (proj: string, hashtags: string) =>
+  const withName =
+    "I'm a Vibe Builder at the {event}, {university}, {dates} — {name}. By IDEEZA with Cheche. {prize}. Register: {register} {hashtags}"
+  const withoutName =
+    "I'm a Vibe Builder at the {event}, {university}, {dates}. By IDEEZA with Cheche. {prize}. Register: {register} {hashtags}"
+
+  const tryBuild = (name: string, hashtags: string) =>
     collapseSpaces(
-      fill(baseTpl, {
-        project: proj,
-        university,
-        dates,
-        register: REGISTER_URL,
+      fill(name ? withName : withoutName, {
+        ...v,
+        name,
         hashtags,
       }),
     )
 
-  let text = tryBuild(project, HASHTAGS_FULL)
+  let text = tryBuild(v.name, HASHTAGS_FULL)
   if (xWeightedLength(text) <= X_CHAR_LIMIT) return text
 
-  if (project) {
-    for (let max = Math.min(project.length, 40); max >= 8; max -= 2) {
+  if (v.name) {
+    for (let max = Math.min(v.name.length, 36); max >= 6; max -= 2) {
       const trimmed =
-        project.length > max ? project.slice(0, max - 1).trimEnd() + '…' : project
+        v.name.length > max ? v.name.slice(0, max - 1).trimEnd() + '…' : v.name
       text = tryBuild(trimmed, HASHTAGS_FULL)
       if (xWeightedLength(text) <= X_CHAR_LIMIT) return text
     }
-    text = collapseSpaces(
-      fill(tpl.withoutProject, {
-        project: '',
-        university,
-        dates,
-        register: REGISTER_URL,
-        hashtags: HASHTAGS_FULL,
-      }),
-    )
+    text = tryBuild('', HASHTAGS_FULL)
     if (xWeightedLength(text) <= X_CHAR_LIMIT) return text
   }
 
-  text = tryBuild(project ? project.slice(0, 12) + '…' : '', HASHTAGS_SHORT)
+  text = tryBuild(v.name ? v.name.slice(0, 10) + '…' : '', HASHTAGS_SHORT)
   if (xWeightedLength(text) <= X_CHAR_LIMIT) return text
 
-  text = collapseSpaces(
-    fill(tpl.withoutProject, {
-      project: '',
-      university,
-      dates,
-      register: REGISTER_URL,
-      hashtags: '#VibeBuilders',
-    }),
-  )
+  text = tryBuild('', '#VibeBuilders')
   if (xWeightedLength(text) <= X_CHAR_LIMIT) return text
 
   while (xWeightedLength(text) > X_CHAR_LIMIT && text.length > 0) {
