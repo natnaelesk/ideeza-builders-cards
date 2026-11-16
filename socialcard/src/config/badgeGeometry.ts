@@ -12,10 +12,11 @@ export const PHOTO_WINDOW = {
   radius: 26,
 }
 
+/** Anton ~72 ≈ 62% badge width for "HANA TADESSE"; auto-shrink via maxWidth */
 export const NAME_SLOT = {
   center: [518.5, 764.5] as [number, number],
-  maxWidth: 520,
-  fontSize: 63,
+  maxWidth: 480,
+  fontSize: 72,
 }
 
 export const EVENT_SLOT = {

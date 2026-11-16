@@ -164,11 +164,19 @@ function drawName(ctx: CanvasRenderingContext2D, name: string) {
   ctx.font = `400 ${size}px Anton, "Arial Narrow", sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  ctx.shadowColor = 'rgba(40, 10, 80, 0.4)'
-  ctx.shadowBlur = 8
+  // Soft purple drop shadow (depth)
+  ctx.shadowColor = 'rgba(45, 15, 90, 0.38)'
+  ctx.shadowBlur = 10
   ctx.shadowOffsetX = 1
   ctx.shadowOffsetY = 3
-  ctx.fillStyle = '#ffffff'
+  // Slight cool-white + outer glow to match original holo print
+  ctx.fillStyle = '#f7f5ff'
+  ctx.fillText(label, 0, 0)
+  ctx.shadowColor = 'rgba(255, 255, 255, 0.45)'
+  ctx.shadowBlur = 6
+  ctx.shadowOffsetX = 0
+  ctx.shadowOffsetY = 0
+  ctx.fillStyle = '#fbfaff'
   ctx.fillText(label, 0, 0)
   ctx.restore()
 }

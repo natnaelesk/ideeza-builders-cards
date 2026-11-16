@@ -78,123 +78,191 @@ def transform_pts(M: np.ndarray, pts: np.ndarray) -> np.ndarray:
     return (M @ hom.T).T
 
 
+def _rounded_rect_mask(
+    h: int, w: int, x0: int, y0: int, x1: int, y1: int, radius: int
+) -> np.ndarray:
+    mask = np.zeros((h, w), np.uint8)
+    cv2.rectangle(mask, (x0 + radius, y0), (x1 - radius, y1), 255, -1)
+    cv2.rectangle(mask, (x0, y0 + radius), (x1, y1 - radius), 255, -1)
+    for ccx, ccy in (
+        (x0 + radius, y0 + radius),
+        (x1 - radius, y0 + radius),
+        (x0 + radius, y1 - radius),
+        (x1 - radius, y1 - radius),
+    ):
+        cv2.circle(mask, (ccx, ccy), radius, 255, -1)
+    return mask
+
+
 def column_blend_fill(
     img: np.ndarray,
     mask: np.ndarray,
-    sample_pad: int = 10,
+    sample_pad: int = 14,
+    feather_px: int = 14,
+    y_forbid: tuple[int, int] | None = None,
 ) -> np.ndarray:
     """
-    For each column, lerp between clean pixels ABOVE and BELOW the mask
-    (sampled outside the mask, not from glyph edges). Matched noise + light blur.
+    Per-column lerp from clean holo above/below the core mask, then feather
+    (≥12px) into the surrounding gradient so no rectangular patch is visible.
+    Matched noise from local holo residuals.
+    y_forbid: optional (y0,y1) band where alpha is forced to 0 (e.g. photo window).
     """
-    out = img.copy()
     h, w = mask.shape
     ys, xs = np.where(mask > 0)
     if len(xs) == 0:
-        return out
-    x0, x1 = int(xs.min()), int(xs.max())
-    rng = np.random.default_rng(7)
-    src = img  # always sample from pre-edit pixels
+        return img.copy()
 
-    for x in range(x0, x1 + 1):
-        cols = np.where(mask[:, x] > 0)[0]
+    core = (mask > 0).astype(np.uint8)
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (feather_px * 2 + 1, feather_px * 2 + 1)
+    )
+    expanded = cv2.dilate(core, kernel)
+    inv = np.where(core > 0, 0, 255).astype(np.uint8)
+    dist = cv2.distanceTransform(inv, cv2.DIST_L2, 5)
+    alpha = np.clip(1.0 - dist / float(feather_px), 0.0, 1.0)
+    alpha = alpha * (expanded > 0)
+    alpha = cv2.GaussianBlur(alpha.astype(np.float32), (0, 0), feather_px * 0.4)
+    alpha = np.clip(alpha, 0.0, 1.0)
+    if y_forbid is not None:
+        fy0, fy1 = y_forbid
+        alpha[fy0:fy1, :] = 0
+
+    work = img.astype(np.float32).copy()
+    src = img.astype(np.float32)
+    rng = np.random.default_rng(7)
+
+    x0, x1 = int(xs.min()), int(xs.max())
+    y_top_all = int(ys.min())
+    # Noise from holo flanks (left of name), not from photo window
+    flank_x0 = max(0, x0 - 60)
+    flank_x1 = max(flank_x0 + 1, x0 - 8)
+    flank_y0 = max(0, y_top_all - 4)
+    flank_y1 = min(h, y_top_all + 40)
+    strip = src[flank_y0:flank_y1, flank_x0:flank_x1]
+    if strip.size == 0:
+        strip = src[max(0, y_top_all - 8) : y_top_all, x0 : x1 + 1]
+    strip_blur = cv2.GaussianBlur(strip, (0, 0), 2.5)
+    residual = strip - strip_blur
+    noise_sigma = float(np.std(residual)) if residual.size else 2.0
+    noise_sigma = max(1.6, min(5.0, noise_sigma))
+
+    apply_xs = np.where(alpha.max(axis=0) > 0.01)[0]
+    for x in range(int(apply_xs.min()), int(apply_xs.max()) + 1):
+        cols = np.where(alpha[:, x] > 0.01)[0]
         if len(cols) == 0:
             continue
-        y_top, y_bot = int(cols[0]), int(cols[-1])
+        core_cols = np.where(core[:, x] > 0)[0]
+        if len(core_cols):
+            y_top, y_bot = int(core_cols[0]), int(core_cols[-1])
+        else:
+            y_top, y_bot = int(cols[0]), int(cols[-1])
+
         ya = max(0, y_top - sample_pad)
         yb = min(h - 1, y_bot + sample_pad)
-        # Ensure samples are outside mask
-        while ya > 0 and mask[ya, x] > 0:
-            ya -= 1
-        while yb < h - 1 and mask[yb, x] > 0:
+        if y_forbid is not None:
+            ya = max(ya, y_forbid[1])  # stay below forbidden band
+        while ya < y_top and (core[ya, x] > 0 or (y_forbid and ya < y_forbid[1])):
+            ya += 1
+        if ya >= y_top:
+            ya = max(0, y_top - 2)
+            if y_forbid is not None:
+                ya = max(ya, y_forbid[1])
+        while yb < h - 1 and core[yb, x] > 0:
             yb += 1
 
         def samp(y: int) -> np.ndarray:
-            yy0, yy1 = max(0, y - 1), min(h, y + 2)
-            xx0, xx1 = max(0, x - 1), min(w, x + 2)
+            yy0, yy1 = max(0, y - 2), min(h, y + 3)
+            # Prefer holo flanks if this column's above-sample sits on atypical chrome
+            xx0, xx1 = max(0, x - 3), min(w, x + 4)
             return src[yy0:yy1, xx0:xx1].reshape(-1, 3).mean(axis=0)
 
-        above = samp(ya)
+        # Side-aware above sample: mix column sample with left/right holo at same y
+        above_c = samp(ya)
+        xl = max(0, x0 - 40)
+        xr = min(w - 1, x1 + 40)
+        above_l = src[ya, xl : xl + 8].mean(axis=0) if xl + 8 <= x0 else above_c
+        above_r = src[ya, xr - 8 : xr].mean(axis=0) if xr - 8 >= x1 else above_c
+        above = above_c * 0.5 + above_l * 0.25 + above_r * 0.25
         below = samp(yb)
+
         span = max(1, y_bot - y_top)
         for y in cols:
-            t = (y - y_top) / span
-            # Ease endpoints toward the nearer clean sample
+            if y <= y_top:
+                t = 0.0
+            elif y >= y_bot:
+                t = 1.0
+            else:
+                u = (y - y_top) / span
+                t = u * u * (3 - 2 * u)
             col = above * (1.0 - t) + below * t
-            noise = rng.normal(0, 1.4, 3)
-            out[y, x] = np.clip(col + noise, 0, 255)
+            # Low-frequency holo drift from flanks at this y
+            if xl + 8 <= x0:
+                side = src[y, xl : xl + 8].mean(axis=0)
+                col = col * 0.7 + side * 0.3
+            noise = rng.normal(0, noise_sigma, 3)
+            filled = np.clip(col + noise, 0, 255)
+            a = float(alpha[y, x])
+            work[y, x] = filled * a + src[y, x] * (1.0 - a)
 
-    blur = cv2.GaussianBlur(out, (0, 0), 0.85)
-    feather = cv2.GaussianBlur(mask, (0, 0), 1.0)
-    m = (feather.astype(np.float32) / 255.0)[..., None]
-    blended = (blur.astype(np.float32) * m + out.astype(np.float32) * (1.0 - m)).astype(
-        np.uint8
-    )
-    blended[mask == 0] = img[mask == 0]
-    return blended
+    blur = cv2.GaussianBlur(work, (0, 0), 0.85)
+    a3 = alpha[..., None]
+    strong = np.clip((a3 - 0.25) / 0.75, 0, 1)
+    work = blur * strong * 0.55 + work * (1.0 - strong * 0.55)
+    out = np.clip(work, 0, 255).astype(np.uint8)
+    out[alpha < 0.01] = img[alpha < 0.01]
+    return out
 
 
 def fill_photo_window(
-    img: np.ndarray, x0: int, y0: int, x1: int, y1: int, inset: int = 4
+    img: np.ndarray, x0: int, y0: int, x1: int, y1: int, border_keep: int = 4
 ) -> np.ndarray:
-    """Fill photo interior with light lavender gradient; keep white border."""
+    """
+    Fill the ENTIRE photo-window interior with a clean light backdrop.
+    Geometric rounded-rect fill (no flood-fill islands), then restore the
+    original rounded white border ring from the source.
+    """
     out = img.copy()
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    h_r, w_r = y1 - y0, x1 - x0
 
-    # Interior = everything inside the bright border ring (not the border itself)
-    roi = gray[y0:y1, x0:x1]
-    border = (roi > 200).astype(np.uint8) * 255
-    border = cv2.morphologyEx(border, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
-    # Shrink border to get interior; also force a rounded rect fallback
-    interior = np.zeros_like(border)
-    # Seed fill from center for pixels that are NOT bright border
-    h_r, w_r = roi.shape
-    seed = (w_r // 2, h_r // 2)
-    flood = border.copy()
-    # Invert: non-border becomes fillable; protect actual white border
-    fillable = np.where(border > 0, 0, 255).astype(np.uint8)
-    # Also treat near-white chrome just inside as border (2px)
-    fillable = cv2.erode(fillable, np.ones((3, 3), np.uint8), iterations=1)
-    mask_ff = np.zeros((h_r + 2, w_r + 2), np.uint8)
-    ff = fillable.copy()
-    cv2.floodFill(ff, mask_ff, seed, 128)
-    interior = (ff == 128).astype(np.uint8) * 255
-    if interior.sum() < 1000:
-        # Fallback rounded rect
-        ix0, iy0 = inset, inset
-        ix1, iy1 = w_r - inset, h_r - inset
-        radius = 18
-        cv2.rectangle(interior, (ix0 + radius, iy0), (ix1 - radius, iy1), 255, -1)
-        cv2.rectangle(interior, (ix0, iy0 + radius), (ix1, iy1 - radius), 255, -1)
-        for ccx, ccy in (
-            (ix0 + radius, iy0 + radius),
-            (ix1 - radius, iy0 + radius),
-            (ix0 + radius, iy1 - radius),
-            (ix1 - radius, iy1 - radius),
-        ):
-            cv2.circle(interior, (ccx, ccy), radius, 255, -1)
+    # Interior: everything inside the white border
+    ix0, iy0 = border_keep, border_keep
+    ix1, iy1 = w_r - border_keep, h_r - border_keep
+    radius = max(12, 22 - border_keep)
+    interior = _rounded_rect_mask(h_r, w_r, ix0, iy0, ix1, iy1, radius)
 
-    # #ECE8F2 → #D9D4E3 in BGR
+    # #ECE8F2 → #D9D4E3 in BGR (studio backdrop)
     c0 = np.array([0xF2, 0xE8, 0xEC], dtype=np.float32)
     c1 = np.array([0xE3, 0xD4, 0xD9], dtype=np.float32)
 
-    hh, ww = h_r, w_r
-    grad = np.zeros((hh, ww, 3), np.float32)
-    for i in range(hh):
-        t = i / max(1, hh - 1)
-        row = c0 * (1 - t) + c1 * t
+    grad = np.zeros((h_r, w_r, 3), np.float32)
+    for i in range(h_r):
+        t = i / max(1, h_r - 1)
+        # Slight top-left bias like the original photo backdrop
+        row = c0 * (1 - t * 0.85) + c1 * (t * 0.85)
         grad[i, :] = row
-    yy, xx = np.mgrid[0:hh, 0:ww]
-    nx = (xx / max(1, ww - 1) - 0.5) * 2
-    ny = (yy / max(1, hh - 1) - 0.5) * 2
+    yy, xx = np.mgrid[0:h_r, 0:w_r]
+    nx = (xx / max(1, w_r - 1) - 0.45) * 2
+    ny = (yy / max(1, h_r - 1) - 0.4) * 2
     r = np.clip(np.sqrt(nx * nx + ny * ny), 0, 1)[..., None]
-    grad = grad * (1 - 0.05 * r) + c1 * (0.05 * r)
+    grad = grad * (1 - 0.07 * r) + c1 * (0.07 * r)
     rng = np.random.default_rng(3)
-    grad = np.clip(grad + rng.normal(0, 1.6, grad.shape), 0, 255)
+    grad = np.clip(grad + rng.normal(0, 1.4, grad.shape), 0, 255)
 
-    patch = out[y0:y1, x0:x1]
+    patch = out[y0:y1, x0:x1].copy()
     local = interior > 0
     patch[local] = grad.astype(np.uint8)[local]
+
+    # Restore original white border ring (bright perimeter), never sample face
+    gray = cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY)
+    # Ring = inside outer rounded window, outside interior
+    outer = _rounded_rect_mask(h_r, w_r, 1, 1, w_r - 2, h_r - 2, 24)
+    ring = (outer > 0) & (interior == 0)
+    # Only restore pixels that look like the white chrome border
+    bright = gray > 190
+    restore = ring & bright
+    orig_patch = img[y0:y1, x0:x1]
+    patch[restore] = orig_patch[restore]
+
     out[y0:y1, x0:x1] = patch
     return out
 
@@ -398,12 +466,12 @@ def main() -> None:
 
     # --- Photo window ---
     before_photo = edited.copy()
-    edited = fill_photo_window(edited, px0, py0, px1, py1, inset=4)
+    edited = fill_photo_window(edited, px0, py0, px1, py1, border_keep=4)
     photo_edit = (
         cv2.absdiff(edited, before_photo).max(axis=2) > 0
     ).astype(np.uint8) * 255
 
-    # --- Name ---
+    # --- Name (feathered column blend — no visible rectangle) ---
     name_mask = detect_name_mask(ugray, px0, py1, px1)
     name_mask = cv2.bitwise_and(name_mask, badge_mask_u)
     print("name mask px", int(name_mask.sum() / 255))
@@ -416,7 +484,17 @@ def main() -> None:
             int(nxs.max()),
             int(nys.max()),
         )
-    edited = column_blend_fill(edited, name_mask, sample_pad=12)
+    before_name = edited.copy()
+    edited = column_blend_fill(
+        edited,
+        name_mask,
+        sample_pad=14,
+        feather_px=16,
+        y_forbid=(0, py1 + 2),  # never feather into the photo window
+    )
+    name_edit = (
+        cv2.absdiff(edited, before_name).max(axis=2) > 0
+    ).astype(np.uint8) * 255
 
     # --- Event line text (keep calendar) ---
     event_mask, event_geo = detect_event_mask(ugray, px0, py1, px1)
@@ -431,9 +509,17 @@ def main() -> None:
             int(exs.max()),
             int(eys.max()),
         )
-    edited = column_blend_fill(edited, event_mask, sample_pad=10)
+    before_event = edited.copy()
+    edited = column_blend_fill(
+        edited, event_mask, sample_pad=12, feather_px=10
+    )
+    event_edit = (
+        cv2.absdiff(edited, before_event).max(axis=2) > 0
+    ).astype(np.uint8) * 255
 
-    edit_u = cv2.bitwise_or(photo_edit, cv2.bitwise_or(name_mask, event_mask))
+    edit_u = cv2.bitwise_or(
+        photo_edit, cv2.bitwise_or(name_edit, event_edit)
+    )
     edit_u = cv2.bitwise_and(edit_u, badge_mask_u)
     # Tiny dilate for warp interpolation; keep clear of VIBE BUILDER band
     edit_u = cv2.dilate(edit_u, np.ones((2, 2), np.uint8), iterations=1)
@@ -507,8 +593,9 @@ def main() -> None:
     tl, tr, br, bl = photo_corners
     pw = float(np.linalg.norm(tr - tl))
     ph = float(np.linalg.norm(bl - tl))
-    # Cap-height of HANA TADESSE ≈ 60px; Anton renders caps ≈ fontSize
-    name_font = int(round(max(58, min(70, name_h * 0.95))))
+    # Anton ~72 ≈ 62% of badge width for "HANA TADESSE"; taller than prior 63
+    name_font = 72
+    name_max_w = 480
 
     # Prefer bbox centers measured on the source (stable vs mask padding)
     gsrc = gray
@@ -521,7 +608,6 @@ def main() -> None:
             [(nxs_s.min() + nxs_s.max()) / 2 + 280, (nys_s.min() + nys_s.max()) / 2 + 735],
             dtype=np.float64,
         )
-        name_font = int(round(max(58, min(70, (nys_s.max() - nys_s.min() + 1) * 1.05))))
 
     eb = gsrc[900:945, 360:750]
     ed = (eb < 90).astype(np.uint8) * 255
@@ -551,7 +637,7 @@ def main() -> None:
         },
         "name": {
             "center": [round(float(name_c[0]), 2), round(float(name_c[1]), 2)],
-            "maxWidth": 520,
+            "maxWidth": name_max_w,
             "fontSize": name_font,
         },
         "eventLine": {
