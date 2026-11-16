@@ -36,9 +36,9 @@ npm run test:share
 
 | Day | Card headline | Project / pitch |
 |-----|---------------|-----------------|
-| Day 1 Workshop | I joined the Vibe Builders Workshop | Optional — hidden on the card when empty |
-| Day 2 IDEEZA Vibe Inventing Hackathon | I built this | Shown (placeholders until filled) |
-| Day 3 Code H.E.R Future Hackathon | She built this | Shown (placeholders until filled) |
+| Day 1 Workshop | I JOINED THE / VIBE BUILDERS WORKSHOP | Optional — hidden when empty; panel shows day context instead |
+| Day 2 IDEEZA Vibe Inventing Hackathon | I BUILT / THIS | Shown (placeholders until filled) |
+| Day 3 Code H.E.R Future Hackathon | SHE BUILT / THIS | Shown (placeholders until filled) |
 
 Prize line on every card: **50,000 birr Prize** (total pool only).
 
@@ -69,5 +69,5 @@ Post templates live in `src/config/shareText.ts`. Every post mentions Wolkite Un
 ## Stack
 
 - Vite + React + TypeScript
-- Poppins (Google Fonts, incl. italic)
+- Montserrat Black/ExtraBold Italic (bundled in `public/fonts/`) + Poppins
 - `html-to-image` for PNG export

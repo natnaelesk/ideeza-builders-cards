@@ -37,19 +37,20 @@ export interface TextStyle {
   letterSpacing?: number
   lineHeight?: number
   gradient?: string
+  textTransform?: 'uppercase' | 'none'
 }
 
 export interface DayConfig {
   id: DayId
-  /** Short label on the day picker */
   pickerLabel: string
-  /** Longer description under the picker button */
   pickerHint: string
-  /** Bold italic headline on the card */
-  headline: string
-  /** Small kicker under the headline */
+  /** First headline line — black italic uppercase (poster “WOLKITE” style) */
+  headline1: string
+  /** Second headline line — purple gradient italic uppercase */
+  headline2: string
   kicker: string
-  /** Whether project + pitch fields matter most (shown on card when filled) */
+  /** Frosted-panel fallback line when project/pitch empty (keeps Day 1 full) */
+  emptyPanelSub: string
   projectRequired: boolean
   defaultName: string
   defaultProject: string
@@ -59,11 +60,10 @@ export interface DayConfig {
 export interface UniversityConfig {
   id: string
   name: string
-  /** Display dates, e.g. "Nov 20–22" */
+  /** Two-line display: ["WOLKITE", "UNIVERSITY"] */
+  nameLines: [string, string]
   dates: string
-  /** Uppercase short dates for the card, e.g. "NOV 20–22" */
   datesShort: string
-  /** Path under `public/` */
   gatePhoto: string
 }
 
@@ -76,6 +76,7 @@ export interface CardLayoutConfig {
   prizeHeadline: string
   tagline: string
   fontFamily: string
+  displayFontFamily: string
   colors: {
     navy: string
     violet: string
@@ -92,7 +93,6 @@ export interface CardLayoutConfig {
     zemenay: string
     insa: string
   }
-  /** Active university for this build (v1 = Wolkite only) */
   university: UniversityConfig
   days: Record<DayId, DayConfig>
   slots: {
@@ -108,24 +108,23 @@ export interface CardLayoutConfig {
       y: number
       w: number
       h1: TextStyle
-      uni: TextStyle
+      h2: TextStyle
+      uni1: TextStyle
+      uni2: TextStyle
+      tagline: TextStyle
+      kicker: TextStyle
+    }
+    gate: Rect
+    photo: Rect & { borderWidth: number; ringWidth: number }
+    datesPrize: {
+      x: number
+      y: number
+      w: number
       dates: TextStyle
+      prize: TextStyle
     }
-    gate: Rect & { borderRadius: number }
-    photo: Rect & { borderRadius: string; borderWidth: number }
-    prize: {
-      x: number
-      y: number
-      w: number
-      fontSize: number
-      fontWeight: number
-      color: string
-      letterSpacing: number
-    }
-    namePanel: {
-      x: number
-      y: number
-      w: number
+    namePanel: Rect & {
+      iconSize: number
       name: TextStyle
       project: TextStyle
       pitch: TextStyle
@@ -138,6 +137,9 @@ export interface CardLayoutConfig {
 
 export const DAY_ORDER: DayId[] = ['day1', 'day2', 'day3']
 
+const DISPLAY = 'Montserrat, Poppins, sans-serif'
+const BODY = 'Poppins, sans-serif'
+
 export const cardLayout: CardLayoutConfig = {
   width: CARD_WIDTH,
   height: CARD_HEIGHT,
@@ -146,12 +148,13 @@ export const cardLayout: CardLayoutConfig = {
   tourLabel: 'VIBE BUILDERS NATIONAL TOUR',
   prizeHeadline: '50,000 birr Prize',
   tagline: 'Turn Your Ideas into Real Hardware',
-  fontFamily: 'Poppins, sans-serif',
+  fontFamily: BODY,
+  displayFontFamily: DISPLAY,
   colors: {
-    navy: '#1a0a3e',
+    navy: '#12052e',
     violet: '#6a2ff0',
     violetSoft: '#8b45ff',
-    magenta: '#b01fff',
+    magenta: '#c43bff',
     lavender: '#f3eeff',
     muted: '#4a3a7a',
     white: '#ffffff',
@@ -166,6 +169,7 @@ export const cardLayout: CardLayoutConfig = {
   university: {
     id: 'wolkite',
     name: 'Wolkite University',
+    nameLines: ['WOLKITE', 'UNIVERSITY'],
     dates: 'Nov 20–22',
     datesShort: 'NOV 20–22',
     gatePhoto: '/campus/wolkite-gate.png',
@@ -175,8 +179,10 @@ export const cardLayout: CardLayoutConfig = {
       id: 'day1',
       pickerLabel: 'Day 1',
       pickerHint: 'Workshop',
-      headline: 'I joined the\nVibe Builders Workshop',
+      headline1: 'I JOINED THE',
+      headline2: 'VIBE BUILDERS\nWORKSHOP',
       kicker: 'Day 1 · Workshop',
+      emptyPanelSub: 'Day 1 · Workshop · Built with IDEEZA',
       projectRequired: false,
       defaultName: 'Your Name',
       defaultProject: '',
@@ -186,8 +192,10 @@ export const cardLayout: CardLayoutConfig = {
       id: 'day2',
       pickerLabel: 'Day 2',
       pickerHint: 'Vibe Inventing Hackathon',
-      headline: 'I built this',
+      headline1: 'I BUILT',
+      headline2: 'THIS',
       kicker: 'Day 2 · IDEEZA Vibe Inventing Hackathon',
+      emptyPanelSub: 'Day 2 · IDEEZA Vibe Inventing Hackathon',
       projectRequired: true,
       defaultName: 'Your Name',
       defaultProject: 'Project Name',
@@ -197,8 +205,11 @@ export const cardLayout: CardLayoutConfig = {
       id: 'day3',
       pickerLabel: 'Day 3',
       pickerHint: 'Code H.E.R Future Hackathon',
-      headline: 'She built this',
+      headline1: 'SHE BUILT',
+      headline2: 'THIS',
       kicker: 'Day 3 · Code H.E.R Future Hackathon by Cheche Technologies',
+      emptyPanelSub:
+        'Day 3 · Code H.E.R Future Hackathon · Built with IDEEZA',
       projectRequired: true,
       defaultName: 'Your Name',
       defaultProject: 'Project Name',
@@ -208,112 +219,157 @@ export const cardLayout: CardLayoutConfig = {
   slots: {
     topLogos: {
       x: 64,
-      y: 42,
+      y: 36,
       w: 952,
-      h: 72,
-      ideezaHeight: 56,
-      checheHeight: 52,
+      h: 64,
+      ideezaHeight: 52,
+      checheHeight: 48,
     },
     tourPill: {
-      x: 120,
-      y: 128,
-      w: 840,
-      h: 56,
-      fontSize: 22,
-      letterSpacing: 2.2,
-      paddingX: 28,
+      x: 100,
+      y: 112,
+      w: 880,
+      h: 52,
+      fontSize: 20,
+      letterSpacing: 2.4,
+      paddingX: 26,
       paddingY: 12,
     },
     headline: {
-      x: 64,
-      y: 198,
-      w: 952,
+      x: 48,
+      y: 170,
+      w: 984,
       h1: {
-        fontFamily: 'Poppins, sans-serif',
-        fontSize: 58,
+        fontFamily: DISPLAY,
+        fontSize: 50,
         fontWeight: 900,
         fontStyle: 'italic',
-        color: '#1a0a3e',
+        color: '#12052e',
         letterSpacing: -1.2,
-        lineHeight: 1.05,
-        gradient: 'linear-gradient(180deg, #b01fff 0%, #4b17c9 100%)',
+        lineHeight: 0.95,
+        textTransform: 'uppercase',
       },
-      uni: {
-        fontFamily: 'Poppins, sans-serif',
-        fontSize: 28,
-        fontWeight: 800,
+      h2: {
+        fontFamily: DISPLAY,
+        fontSize: 48,
+        fontWeight: 900,
         fontStyle: 'italic',
-        color: '#4b17c9',
-        letterSpacing: -0.4,
+        color: '#6a2ff0',
+        letterSpacing: -1.2,
+        lineHeight: 0.95,
+        textTransform: 'uppercase',
+        gradient: 'linear-gradient(180deg, #d24bff 0%, #5a1fe0 55%, #3a0f9a 100%)',
+      },
+      uni1: {
+        fontFamily: DISPLAY,
+        fontSize: 30,
+        fontWeight: 900,
+        fontStyle: 'italic',
+        color: '#12052e',
+        letterSpacing: -0.6,
+        lineHeight: 0.98,
+        textTransform: 'uppercase',
+      },
+      uni2: {
+        fontFamily: DISPLAY,
+        fontSize: 30,
+        fontWeight: 900,
+        fontStyle: 'italic',
+        color: '#6a2ff0',
+        letterSpacing: -0.6,
+        lineHeight: 0.98,
+        textTransform: 'uppercase',
+        gradient: 'linear-gradient(180deg, #c43bff 0%, #5a1fe0 100%)',
+      },
+      tagline: {
+        fontFamily: DISPLAY,
+        fontSize: 18,
+        fontWeight: 700,
+        fontStyle: 'italic',
+        color: '#3a2a6a',
+        letterSpacing: 0.2,
         lineHeight: 1.2,
       },
-      dates: {
-        fontFamily: 'Poppins, sans-serif',
-        fontSize: 24,
-        fontWeight: 700,
-        color: '#1a0a3e',
-        letterSpacing: 1.5,
-        lineHeight: 1.2,
+      kicker: {
+        fontFamily: BODY,
+        fontSize: 15,
+        fontWeight: 600,
+        color: '#5b4b8a',
+        lineHeight: 1.25,
       },
     },
     gate: {
-      x: 64,
-      y: 400,
-      w: 952,
-      h: 360,
-      borderRadius: 28,
+      x: 28,
+      y: 430,
+      w: 1024,
+      h: 430,
     },
     photo: {
-      x: 96,
-      y: 620,
-      w: 200,
-      h: 200,
-      borderRadius: '50%',
-      borderWidth: 6,
+      x: 68,
+      y: 690,
+      w: 176,
+      h: 176,
+      borderWidth: 7,
+      ringWidth: 4,
     },
-    prize: {
+    datesPrize: {
       x: 64,
-      y: 790,
+      y: 870,
       w: 952,
-      fontSize: 56,
-      fontWeight: 900,
-      color: '#6a2ff0',
-      letterSpacing: -1,
+      dates: {
+        fontFamily: BODY,
+        fontSize: 30,
+        fontWeight: 800,
+        color: '#12052e',
+        letterSpacing: 1.8,
+        lineHeight: 1.15,
+      },
+      prize: {
+        fontFamily: DISPLAY,
+        fontSize: 48,
+        fontWeight: 900,
+        fontStyle: 'italic',
+        color: '#6a2ff0',
+        letterSpacing: -0.8,
+        lineHeight: 1.1,
+      },
     },
     namePanel: {
       x: 64,
-      y: 880,
+      y: 990,
       w: 952,
+      h: 158,
+      iconSize: 76,
       name: {
-        fontFamily: 'Poppins, sans-serif',
-        fontSize: 42,
+        fontFamily: BODY,
+        fontSize: 34,
         fontWeight: 800,
-        color: '#1a0a3e',
-        letterSpacing: -0.5,
+        color: '#12052e',
+        letterSpacing: -0.4,
         lineHeight: 1.15,
       },
       project: {
-        fontFamily: 'Poppins, sans-serif',
-        fontSize: 28,
+        fontFamily: BODY,
+        fontSize: 24,
         fontWeight: 700,
-        color: '#4b17c9',
-        letterSpacing: -0.3,
+        color: '#5a1fe0',
+        letterSpacing: -0.2,
         lineHeight: 1.25,
       },
       pitch: {
-        fontFamily: 'Poppins, sans-serif',
-        fontSize: 22,
+        fontFamily: BODY,
+        fontSize: 20,
         fontWeight: 500,
         color: '#4a3a7a',
-        lineHeight: 1.35,
+        lineHeight: 1.3,
       },
     },
     logoStrip: {
-      x: 64,
-      y: 1180,
-      w: 952,
+      x: 48,
+      y: 1168,
+      w: 984,
       h: 120,
-      heights: { cheche: 72, zemenay: 56, insa: 88 },
+      heights: { cheche: 70, zemenay: 54, insa: 82 },
     },
   },
 }

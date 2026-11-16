@@ -40,9 +40,20 @@ async function shotPreview(name) {
 }
 
 await page.goto(BASE, { waitUntil: 'networkidle' })
-await page.waitForTimeout(1000)
-await fillSample()
+await page.evaluate(async () => {
+  await document.fonts.ready
+  await document.fonts.load('italic 900 56px Montserrat')
+})
+await page.waitForTimeout(1200)
 
+// Day 1 empty (no project/pitch) — should still look full
+await page.getByLabel('Your name').fill('Hana Tadesse')
+await page.locator('input[type="file"]').setInputFiles(PHOTO)
+await page.waitForTimeout(600)
+await clickDay('Day 1')
+await shotPreview('wolkite-day1-empty-card.png')
+
+await fillSample()
 await clickDay('Day 1')
 await shotPreview('wolkite-day1-card.png')
 
@@ -54,7 +65,7 @@ await shotPreview('wolkite-day3-card.png')
 
 // Mobile page shot at 375px
 await page.setViewportSize({ width: 375, height: 812 })
-await page.waitForTimeout(600)
+await page.waitForTimeout(700)
 await page.screenshot({
   path: path.join(OUT, 'wolkite-mobile-375.png'),
   fullPage: true,
