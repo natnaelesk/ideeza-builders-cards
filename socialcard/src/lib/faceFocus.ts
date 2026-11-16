@@ -1,10 +1,12 @@
+import { PHOTO_WINDOW } from '../config/badgeGeometry'
+import { clampTransform } from './photoCover'
 import { defaultPhotoTransform, type PhotoTransform } from '../types'
 
 type FaceBox = { x: number; y: number; width: number; height: number }
 
 /**
  * Prefer FaceDetector when available; otherwise return default upward bias.
- * Maps the detected face center into our pan/zoom transform space.
+ * Offsets are in window-local pixels (same space as PhotoTransform.ox/oy).
  */
 export async function focusTransformForPhoto(
   dataUrl: string,
@@ -36,15 +38,17 @@ export async function focusTransformForPhoto(
     const box = faces[0].boundingBox
     const faceCx = box.x + box.width / 2
     const faceCy = box.y + box.height / 2
-    // Normalize face center to [-1, 1] relative to image center
-    const nx = (faceCx / img.width - 0.5) * 2
-    const ny = (faceCy / img.height - 0.5) * 2
-    // Pan so the face sits slightly above center (negative y in our space = up)
-    return {
-      x: Math.max(-40, Math.min(40, -nx * 28)),
-      y: Math.max(-20, Math.min(40, 12 - ny * 22)),
-      zoom: Math.max(1.02, Math.min(1.35, 1.08 + box.height / img.height)),
+    const nx = faceCx / img.width - 0.5
+    const ny = faceCy / img.height - 0.5
+    const { width: winW, height: winH } = PHOTO_WINDOW
+    const zoom = Math.max(1.05, Math.min(1.4, 1.08 + box.height / img.height))
+    const proposed: PhotoTransform = {
+      // Shift image so face moves toward upper center of the window
+      ox: -nx * winW * 0.55,
+      oy: -ny * winH * 0.55 - 14,
+      zoom,
     }
+    return clampTransform(proposed, img.naturalWidth || img.width, img.naturalHeight || img.height)
   } catch {
     return base
   }

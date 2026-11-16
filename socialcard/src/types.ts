@@ -1,6 +1,11 @@
+/**
+ * Photo placement in the badge window's local (unrotated) frame.
+ * ox/oy = image-center offset from window center (px). Positive ox → right,
+ * positive oy → down. Always clamped so the cover-fit image never gaps.
+ */
 export interface PhotoTransform {
-  x: number
-  y: number
+  ox: number
+  oy: number
   zoom: number
 }
 
@@ -12,12 +17,10 @@ export interface CardFormState {
 
 /** Default: slight upward bias so faces sit higher in the window. */
 export const defaultPhotoTransform = (): PhotoTransform => ({
-  x: 0,
-  y: 10,
+  ox: 0,
+  oy: -12,
   zoom: 1.05,
 })
 
-export const PHOTO_PAN_MIN = -50
-export const PHOTO_PAN_MAX = 50
 export const PHOTO_ZOOM_MIN = 1
-export const PHOTO_ZOOM_MAX = 2.5
+export const PHOTO_ZOOM_MAX = 4
