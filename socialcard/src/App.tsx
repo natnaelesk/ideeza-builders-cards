@@ -50,12 +50,16 @@ type PointerMode = 'idle' | 'drag' | 'pinch'
 type GestureCoachPhase = 'off' | 'on' | 'hiding'
 
 function prefersFinePointer(): boolean {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return false
+  if (typeof window === 'undefined') return false
+  if (typeof window.matchMedia === 'function') {
+    // Combined query — primary signal for mouse/trackpad desktops
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      return true
+    }
   }
+  // Fallback when hover/pointer media is unreliable but the device has no touch
   return (
-    window.matchMedia('(pointer: fine)').matches &&
-    window.matchMedia('(hover: hover)').matches
+    !('ontouchstart' in window) && (navigator.maxTouchPoints ?? 0) === 0
   )
 }
 
@@ -171,17 +175,15 @@ export default function App() {
   }, [gestureCoach])
 
   useEffect(() => {
-    const fine = window.matchMedia('(pointer: fine)')
-    const hover = window.matchMedia('(hover: hover)')
-    const sync = () =>
-      setFinePointer(fine.matches && hover.matches)
+    const mq =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(hover: hover) and (pointer: fine)')
+        : null
+    const sync = () => setFinePointer(prefersFinePointer())
     sync()
-    fine.addEventListener('change', sync)
-    hover.addEventListener('change', sync)
-    return () => {
-      fine.removeEventListener('change', sync)
-      hover.removeEventListener('change', sync)
-    }
+    if (!mq) return
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
   }, [])
 
   const dismissGestureCoach = useCallback(() => {
