@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   DownloadIcon,
+  HandDragIcon,
   InstagramIcon,
   LinkedInIcon,
   MoreIcon,
@@ -46,6 +47,17 @@ interface ShareSheetState {
 }
 
 type PointerMode = 'idle' | 'drag' | 'pinch'
+type GestureCoachPhase = 'off' | 'on' | 'hiding'
+
+function prefersFinePointer(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false
+  }
+  return (
+    window.matchMedia('(pointer: fine)').matches &&
+    window.matchMedia('(hover: hover)').matches
+  )
+}
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -98,14 +110,18 @@ export default function App() {
     url: string
     filename: string
   } | null>(null)
+  const [gestureCoach, setGestureCoach] = useState<GestureCoachPhase>('off')
+  const [finePointer, setFinePointer] = useState(prefersFinePointer)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const shareCardRef = useRef<ShareCardHandle>(null)
   const previewAreaRef = useRef<HTMLDivElement>(null)
   const previewViewportRef = useRef<HTMLDivElement>(null)
+  const photoHitRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
   const moreRef = useRef<HTMLDivElement>(null)
+  const gestureCoachRef = useRef<GestureCoachPhase>('off')
 
   /** Pre-rendered PNG Files — ready for sync navigator.share in the click gesture */
   const exportFilesRef = useRef<{
@@ -121,6 +137,7 @@ export default function App() {
   const previewScaleRef = useRef(previewScale)
   const layoutModeRef = useRef(layoutMode)
   const rafDrawRef = useRef(0)
+  const wheelCommitRef = useRef(0)
   const zoomUiRef = useRef<HTMLSpanElement>(null)
 
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
@@ -148,6 +165,41 @@ export default function App() {
   useEffect(() => {
     layoutModeRef.current = layoutMode
   }, [layoutMode])
+
+  useEffect(() => {
+    gestureCoachRef.current = gestureCoach
+  }, [gestureCoach])
+
+  useEffect(() => {
+    const fine = window.matchMedia('(pointer: fine)')
+    const hover = window.matchMedia('(hover: hover)')
+    const sync = () =>
+      setFinePointer(fine.matches && hover.matches)
+    sync()
+    fine.addEventListener('change', sync)
+    hover.addEventListener('change', sync)
+    return () => {
+      fine.removeEventListener('change', sync)
+      hover.removeEventListener('change', sync)
+    }
+  }, [])
+
+  const dismissGestureCoach = useCallback(() => {
+    if (gestureCoachRef.current !== 'on') return
+    setGestureCoach('hiding')
+  }, [])
+
+  useEffect(() => {
+    if (gestureCoach !== 'hiding') return
+    const t = window.setTimeout(() => setGestureCoach('off'), 200)
+    return () => window.clearTimeout(t)
+  }, [gestureCoach])
+
+  useEffect(() => {
+    if (gestureCoach !== 'on') return
+    const t = window.setTimeout(() => dismissGestureCoach(), 4000)
+    return () => window.clearTimeout(t)
+  }, [gestureCoach, dismissGestureCoach])
 
   const scheduleLiveDraw = useCallback(() => {
     if (rafDrawRef.current) return
@@ -257,6 +309,42 @@ export default function App() {
     return () => vp.removeEventListener('touchmove', block)
   }, [])
 
+  // Wheel zoom over the photo (non-passive so preventDefault works)
+  useEffect(() => {
+    const hit = photoHitRef.current
+    if (!hit) return
+    const onWheel = (e: WheelEvent) => {
+      if (hit.classList.contains('is-disabled')) return
+      e.preventDefault()
+      dismissGestureCoach()
+      const size = photoSizeRef.current
+      const prev = liveTransformRef.current
+      // Smooth zoom: deltaY > 0 = zoom out
+      const nextZoom = Math.min(
+        PHOTO_ZOOM_MAX,
+        Math.max(
+          PHOTO_ZOOM_MIN,
+          prev.zoom * Math.exp(-e.deltaY * 0.0018),
+        ),
+      )
+      if (Math.abs(nextZoom - prev.zoom) < 0.0005) return
+      const proposed = { ...prev, zoom: nextZoom }
+      liveTransformRef.current = size
+        ? liveClampTransform(proposed, size.w, size.h, prev)
+        : proposed
+      scheduleLiveDraw()
+      window.clearTimeout(wheelCommitRef.current)
+      wheelCommitRef.current = window.setTimeout(() => {
+        commitLiveTransform()
+      }, 120)
+    }
+    hit.addEventListener('wheel', onWheel, { passive: false })
+    return () => {
+      hit.removeEventListener('wheel', onWheel)
+      window.clearTimeout(wheelCommitRef.current)
+    }
+  }, [commitLiveTransform, dismissGestureCoach, scheduleLiveDraw])
+
   const applyClamped = useCallback(
     (next: PhotoTransform | ((prev: PhotoTransform) => PhotoTransform)) => {
       setPhotoTransform((prev) => {
@@ -294,6 +382,7 @@ export default function App() {
       setPhotoUrl(null)
       setPhotoSize(null)
       setPhotoTransform(defaultPhotoTransform())
+      setGestureCoach('off')
       return
     }
     const dataUrl = await readFileAsDataUrl(file)
@@ -302,6 +391,7 @@ export default function App() {
     setPhotoUrl(dataUrl)
     const focus = await focusTransformForPhoto(dataUrl)
     setPhotoTransform(clampTransform(focus, size.w, size.h))
+    setGestureCoach('on')
   }
 
   const resetPhoto = () => {
@@ -642,6 +732,7 @@ export default function App() {
       const dlx = local.lx - last.lx
       const dly = local.ly - last.ly
       dragLastLocalRef.current = local
+      if (dlx !== 0 || dly !== 0) dismissGestureCoach()
       const prev = liveTransformRef.current
       const proposed = { ...prev, ox: prev.ox + dlx, oy: prev.oy + dly }
       liveTransformRef.current = size
@@ -652,6 +743,7 @@ export default function App() {
     }
 
     if (modeRef.current === 'pinch' && pointersRef.current.size >= 2) {
+      dismissGestureCoach()
       const pts = [...pointersRef.current.values()]
       const dx = pts[1].x - pts[0].x
       const dy = pts[1].y - pts[0].y
@@ -744,6 +836,7 @@ export default function App() {
               <ShareCard ref={shareCardRef} state={state} canvasRef={canvasRef} />
             </div>
             <div
+              ref={photoHitRef}
               className={`app__photo-hit${photoUrl ? '' : ' is-disabled'}`}
               role="presentation"
               aria-label="Drag to reposition photo"
@@ -752,12 +845,29 @@ export default function App() {
               onPointerUp={endPointer}
               onPointerCancel={endPointer}
             />
+            {photoUrl && gestureCoach !== 'off' ? (
+              <div
+                className={`app__gesture-coach${gestureCoach === 'hiding' ? ' is-hiding' : ''}`}
+                aria-hidden
+              >
+                <div className="app__gesture-coach-pill">
+                  <span className="app__gesture-coach-hand">
+                    <HandDragIcon size={30} />
+                  </span>
+                  <span className="app__gesture-coach-text">
+                    {finePointer
+                      ? 'Drag to move · Scroll or use the slider to zoom'
+                      : 'Drag to move your photo · Pinch to zoom'}
+                  </span>
+                </div>
+              </div>
+            ) : null}
           </div>
           <p
             className={`app__photo-hint${photoUrl ? '' : ' is-placeholder'}`}
             aria-hidden={!photoUrl}
           >
-            Drag to move · pinch to zoom
+            Not centered? Drag your photo to adjust it.
           </p>
         </div>
 
@@ -821,6 +931,7 @@ export default function App() {
                   value={photoTransform.zoom}
                   disabled={!photoUrl}
                   onInput={(e) => {
+                    dismissGestureCoach()
                     const zoom = Number((e.target as HTMLInputElement).value)
                     const prev = liveTransformRef.current
                     const size = photoSizeRef.current
@@ -831,6 +942,7 @@ export default function App() {
                     scheduleLiveDraw()
                   }}
                   onChange={(e) => {
+                    dismissGestureCoach()
                     const zoom = Number(e.target.value)
                     const prev = liveTransformRef.current
                     liveTransformRef.current = { ...prev, zoom }

@@ -153,3 +153,27 @@ export function GridIcon({ size = 18 }: { size?: number }) {
     </svg>
   )
 }
+
+/** Open-hand drag cue for the photo coach overlay */
+export function HandDragIcon({ size = 28 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      aria-hidden
+      focusable="false"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M8 11.5V7.2a1.4 1.4 0 0 1 2.8 0V11" />
+      <path d="M10.8 10.8V6.4a1.4 1.4 0 0 1 2.8 0V11" />
+      <path d="M13.6 10.5V7.1a1.4 1.4 0 1 1 2.8 0v6.2" />
+      <path d="M8 11.5v1.2A5.2 5.2 0 0 0 13.2 18h1.1a4.2 4.2 0 0 0 4.2-4.2v-2.1a1.4 1.4 0 0 0-2.8 0" />
+      <path d="M8 11.5A1.6 1.6 0 0 0 5.5 13v1.1A5.4 5.4 0 0 0 10.9 19.5" />
+    </svg>
+  )
+}
