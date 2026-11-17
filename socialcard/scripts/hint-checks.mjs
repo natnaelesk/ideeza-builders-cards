@@ -211,7 +211,7 @@ for (const vp of VIEWPORTS) {
   await context.close()
 }
 
-// --- Desktop overlay ---
+// --- Desktop overlay (~800ms after upload, still visible) ---
 {
   const context = await browser.newContext({
     viewport: { width: 1280, height: 800 },
@@ -227,17 +227,51 @@ for (const vp of VIEWPORTS) {
   await page.getByPlaceholder('Hana Tadesse').fill('Natnael Eskinder')
   await page.locator('input[type="file"]').setInputFiles(PHOTO)
   await page.waitForSelector('.app__gesture-coach')
-  await page.waitForTimeout(350)
-  const desk = await measure(page)
-  const coachText = await page
-    .locator('.app__gesture-coach-text')
-    .textContent()
+  await page.waitForTimeout(800)
+  const deskGeom = await page.evaluate(() => {
+    const coach = document.querySelector('.app__gesture-coach')
+    const preview = document.querySelector('.app__preview-viewport')
+    const text = document.querySelector('.app__gesture-coach-text')
+    if (!coach || !preview) {
+      return { ok: false, reason: 'missing coach or preview' }
+    }
+    const cs = getComputedStyle(coach)
+    const cr = coach.getBoundingClientRect()
+    const pr = preview.getBoundingClientRect()
+    const within =
+      cr.left >= pr.left - 1 &&
+      cr.top >= pr.top - 1 &&
+      cr.right <= pr.right + 1 &&
+      cr.bottom <= pr.bottom + 1
+    return {
+      ok: true,
+      position: cs.position,
+      opacity: Number(cs.opacity),
+      text: (text?.textContent || '').trim(),
+      coachRect: {
+        x: +cr.x.toFixed(1),
+        y: +cr.y.toFixed(1),
+        w: +cr.width.toFixed(1),
+        h: +cr.height.toFixed(1),
+      },
+      previewRect: {
+        x: +pr.x.toFixed(1),
+        y: +pr.y.toFixed(1),
+        w: +pr.width.toFixed(1),
+        h: +pr.height.toFixed(1),
+      },
+      withinPreview: within,
+      finePointerMq: window.matchMedia(
+        '(hover: hover) and (pointer: fine)',
+      ).matches,
+    }
+  })
   await page.screenshot({
     path: path.join(OUT, 'hint-desktop-1280x800.png'),
     fullPage: false,
   })
 
-  // Wheel zoom smoke
+  // Wheel zoom smoke (after geometry check — may dismiss coach)
   const hit = page.locator('.app__photo-hit')
   const beforeZoom = await page.evaluate(
     () => window.__badgeDebug?.getTransform?.()?.zoom ?? null,
@@ -250,11 +284,14 @@ for (const vp of VIEWPORTS) {
     () => window.__badgeDebug?.getTransform?.()?.zoom ?? null,
   )
 
+  report.desktopGeom = deskGeom
   report.desktopOverlay =
-    desk.coachPresent &&
-    desk.coachOpacity > 0.5 &&
-    /Scroll or use the slider/i.test(coachText || '')
-  report.desktopCoachText = (coachText || '').trim()
+    deskGeom.ok &&
+    deskGeom.position === 'absolute' &&
+    deskGeom.withinPreview &&
+    deskGeom.opacity === 1 &&
+    /Scroll or use the slider/i.test(deskGeom.text || '')
+  report.desktopCoachText = deskGeom.text || null
   report.wheelZoom = {
     before: beforeZoom,
     after: afterZoom,
@@ -263,7 +300,7 @@ for (const vp of VIEWPORTS) {
   }
   console.log('desktop', {
     overlay: report.desktopOverlay,
-    text: report.desktopCoachText,
+    geom: deskGeom,
     wheel: report.wheelZoom,
   })
   await context.close()
@@ -276,7 +313,8 @@ report.allOk =
   report.overlayHidesAfterDrag &&
   report.helperLineOk &&
   report.exportClean &&
-  report.desktopOverlay
+  report.desktopOverlay &&
+  report.wheelZoom?.increased
 
 await writeFile(path.join(OUT, 'hint-checks.json'), JSON.stringify(report, null, 2))
 console.log(JSON.stringify(report, null, 2))
