@@ -326,6 +326,19 @@
   text-align: center;
 }
 
+.app__footer-link {
+  color: var(--violet);
+  text-decoration: none;
+}
+
+.app__footer-link:hover {
+  text-decoration: underline;
+}
+
+.app__preview-viewport--hackathon {
+  background: #120726;
+}
+
 @media (min-width: 900px) {
   .app {
     padding: 28px 32px 48px;

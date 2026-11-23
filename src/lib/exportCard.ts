@@ -1,34 +1,44 @@
-import { toPng } from 'html-to-image'
+import { getFontEmbedCSS, toPng } from 'html-to-image'
 import { CARD_HEIGHT, CARD_WIDTH } from '../config/cardLayout'
 import { waitForFonts } from './fonts'
 
+let cachedFontEmbedCSS: string | null = null
+
+async function resolveFontEmbedCSS(node: HTMLElement): Promise<string> {
+  if (cachedFontEmbedCSS) return cachedFontEmbedCSS
+  try {
+    // Library walks document stylesheets (incl. /fonts/fonts.css) and inlines
+    // same-origin woff2 as data URLs — required for SVG foreignObject capture.
+    cachedFontEmbedCSS = await getFontEmbedCSS(node)
+    return cachedFontEmbedCSS
+  } catch (err) {
+    console.warn('getFontEmbedCSS failed; export may use fallback fonts', err)
+    return ''
+  }
+}
+
 export async function renderCardPng(node: HTMLElement): Promise<string> {
   await waitForFonts()
-  // Double-pass: first warm up layout/images, second is the crisp capture.
-  await toPng(node, {
+  const fontEmbedCSS = await resolveFontEmbedCSS(node)
+
+  const opts = {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
     pixelRatio: 1,
     cacheBust: true,
+    fontEmbedCSS,
     style: {
       transform: 'none',
       transformOrigin: 'top left',
       left: '0',
       top: '0',
+      fontFamily: 'Poppins, sans-serif',
     },
-  })
-  return toPng(node, {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
-    pixelRatio: 1,
-    cacheBust: true,
-    style: {
-      transform: 'none',
-      transformOrigin: 'top left',
-      left: '0',
-      top: '0',
-    },
-  })
+  }
+
+  // Double-pass: first warm up layout/images/fonts, second is the crisp capture.
+  await toPng(node, opts)
+  return toPng(node, opts)
 }
 
 export function downloadDataUrl(dataUrl: string, filename: string) {

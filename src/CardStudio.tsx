@@ -457,6 +457,10 @@ export function CardStudio({ mode, initialCustomRole = '' }: CardStudioProps) {
         <span>Women Techmakers Ethiopia</span>
         <span aria-hidden>·</span>
         <span>FCA Creators Hub</span>
+        <span aria-hidden>·</span>
+        <a className="app__footer-link" href="/hackathon">
+          Virtual Hackathon cards
+        </a>
       </footer>
 
       <Toast message={toast} onDismiss={() => setToast(null)} />
