@@ -224,13 +224,13 @@
   color: #c6a8ff;
 }
 
-/* Portrait photo + info column */
+/* Portrait photo + info column — same height so QR flushes with photo bottom */
 .hk-card__body {
   position: absolute;
   left: 64px;
   top: 598px;
   width: 952px;
-  height: 470px;
+  height: 440px;
   z-index: 3;
   display: flex;
   align-items: stretch;
@@ -250,7 +250,7 @@
     inset 0 0 0 1.5px #ffffff33;
   overflow: hidden;
   position: relative;
-  align-self: flex-start;
+  align-self: stretch;
 }
 
 .hk-card__photo.has-photo {
@@ -310,10 +310,11 @@
 .hk-card__info {
   flex: 1;
   min-width: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  padding-top: 18px;
+  padding-top: 4px;
 }
 
 .hk-card__name {
@@ -363,12 +364,17 @@
 }
 
 .hk-card__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: #ffffff14;
   border: 1px solid #ffffff28;
   border-radius: 999px;
-  padding: 9px 16px;
+  /* Slightly heavier top padding — Poppins metrics sit high in the em box */
+  padding: 10px 16px 7px;
   font-size: 15px;
   font-weight: 600;
+  line-height: 1;
   color: #efe8ff;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -380,7 +386,8 @@
   align-items: center;
   gap: 16px;
   margin-top: auto;
-  padding-top: 22px;
+  padding-top: 0;
+  flex: none;
 }
 
 .hk-card__qr-wrap {
