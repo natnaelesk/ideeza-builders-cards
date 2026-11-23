@@ -21,12 +21,18 @@ export async function renderCardPng(node: HTMLElement): Promise<string> {
   await waitForFonts()
   const fontEmbedCSS = await resolveFontEmbedCSS(node)
 
+  // Prefixed rule ensures every text node in the cloned subtree uses Poppins,
+  // including small labels that may otherwise fall back in foreignObject.
+  const forcedFamily =
+    `${fontEmbedCSS}` +
+    `.hk-card,.hk-card *{font-family:Poppins,sans-serif!important}`
+
   const opts = {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
     pixelRatio: 1,
     cacheBust: true,
-    fontEmbedCSS,
+    fontEmbedCSS: forcedFamily,
     style: {
       transform: 'none',
       transformOrigin: 'top left',
