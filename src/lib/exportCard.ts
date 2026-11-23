@@ -1,38 +1,35 @@
-import { getFontEmbedCSS, toPng } from 'html-to-image'
+import { toPng } from 'html-to-image'
 import { CARD_HEIGHT, CARD_WIDTH } from '../config/cardLayout'
-import { waitForFonts } from './fonts'
-
-let cachedFontEmbedCSS: string | null = null
-
-async function resolveFontEmbedCSS(node: HTMLElement): Promise<string> {
-  if (cachedFontEmbedCSS) return cachedFontEmbedCSS
-  try {
-    // Library walks document stylesheets (incl. /fonts/fonts.css) and inlines
-    // same-origin woff2 as data URLs — required for SVG foreignObject capture.
-    cachedFontEmbedCSS = await getFontEmbedCSS(node)
-    return cachedFontEmbedCSS
-  } catch (err) {
-    console.warn('getFontEmbedCSS failed; export may use fallback fonts', err)
-    return ''
-  }
-}
+import { getPoppinsEmbedCss, waitForFonts } from './fonts'
 
 export async function renderCardPng(node: HTMLElement): Promise<string> {
   await waitForFonts()
-  const fontEmbedCSS = await resolveFontEmbedCSS(node)
+  let fontEmbedCSS = ''
+  try {
+    fontEmbedCSS = await getPoppinsEmbedCss()
+  } catch (err) {
+    console.warn('Poppins embed CSS unavailable; export may use fallback fonts', err)
+  }
 
-  // Prefixed rule ensures every text node in the cloned subtree uses Poppins,
-  // including small labels that may otherwise fall back in foreignObject.
-  const forcedFamily =
-    `${fontEmbedCSS}` +
-    `.hk-card,.hk-card *{font-family:Poppins,sans-serif!important}`
+  // Inject inlined @font-face into the live card so the clone inherits it
+  // even if foreignObject embedding is flaky for small text sizes.
+  const styleId = 'ideeza-poppins-embed'
+  let injected = document.getElementById(styleId) as HTMLStyleElement | null
+  if (fontEmbedCSS) {
+    if (!injected) {
+      injected = document.createElement('style')
+      injected.id = styleId
+      document.head.appendChild(injected)
+    }
+    injected.textContent = fontEmbedCSS
+  }
 
   const opts = {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
     pixelRatio: 1,
     cacheBust: true,
-    fontEmbedCSS: forcedFamily,
+    fontEmbedCSS,
     style: {
       transform: 'none',
       transformOrigin: 'top left',

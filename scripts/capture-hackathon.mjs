@@ -83,6 +83,7 @@ const browser = await chromium.launch()
     process.exitCode = 1
   }
   fs.copyFileSync(outPath, path.join(OUT, 'hackathon-card-side-by-side.png'))
+  fs.copyFileSync(outPath, path.join(OUT, 'hackathon-card-layout-fonts-fixed.png'))
 
   await ctx.close()
 }
