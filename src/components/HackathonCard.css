@@ -13,7 +13,7 @@
     linear-gradient(180deg, #1a0a3e 0%, #120726 48%, #0d061f 100%);
 }
 
-/* Force Poppins on every text node so html-to-image never falls back on small labels */
+/* Force Poppins on every text node so export never falls back */
 .hk-card,
 .hk-card * {
   font-family: Poppins, sans-serif !important;
@@ -67,7 +67,7 @@
 .hk-card__sphere--s1 {
   width: 220px;
   height: 220px;
-  top: 980px;
+  top: 1000px;
   left: -80px;
   opacity: 0.7;
 }
@@ -75,21 +75,21 @@
 .hk-card__sphere--s2 {
   width: 72px;
   height: 72px;
-  top: 178px;
+  top: 168px;
   right: 280px;
 }
 
 .hk-card__sphere--s3 {
   width: 180px;
   height: 180px;
-  top: 640px;
+  top: 620px;
   right: -70px;
 }
 
 .hk-card__sphere--s4 {
   width: 36px;
   height: 36px;
-  top: 400px;
+  top: 390px;
   left: 520px;
 }
 
@@ -108,19 +108,19 @@
 .hk-card__logo {
   position: absolute;
   left: 64px;
-  top: 42px;
+  top: 40px;
   z-index: 2;
 }
 
 .hk-card__logo img {
-  height: 62px;
+  height: 58px;
   width: auto;
   display: block;
 }
 
 .hk-card__pill {
   position: absolute;
-  top: 52px;
+  top: 48px;
   right: 64px;
   z-index: 2;
   color: #fff;
@@ -129,10 +129,10 @@
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   font-weight: 700;
-  font-size: 16px;
-  letter-spacing: 2.4px;
+  font-size: 15px;
+  letter-spacing: 2.2px;
   padding: 10px 18px;
   box-shadow:
     0 12px 30px #5a28dc59,
@@ -141,8 +141,8 @@
 }
 
 .hk-card__pill-dot {
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: #b9ff6a;
   box-shadow:
@@ -153,15 +153,15 @@
 .hk-card__hero {
   position: absolute;
   left: 64px;
-  top: 132px;
+  top: 120px;
   width: 952px;
   z-index: 2;
 }
 
 .hk-card__eyebrow {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 5.5px;
+  letter-spacing: 5px;
   color: #c6a8ff;
   text-transform: uppercase;
   display: flex;
@@ -170,8 +170,8 @@
 }
 
 .hk-card__sq {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   background: #6a2ff0;
   border-radius: 2px;
   flex: none;
@@ -180,18 +180,18 @@
 
 .hk-card__prize {
   margin-top: 2px;
-  font-size: 108px;
+  font-size: 88px;
   font-weight: 900;
-  letter-spacing: -5.5px;
+  letter-spacing: -4.5px;
   line-height: 0.9;
   color: #fff;
   text-shadow: 0 20px 60px #6a2ff066;
 }
 
 .hk-card__prize-sub {
-  margin-top: 10px;
-  font-size: 20px;
-  font-weight: 400;
+  margin-top: 6px;
+  font-size: 17px;
+  font-weight: 500;
   color: #c6a8ff;
   letter-spacing: 0.15px;
   line-height: 1.3;
@@ -200,13 +200,13 @@
 .hk-card__headline {
   position: absolute;
   left: 64px;
-  top: 338px;
+  top: 278px;
   width: 952px;
   z-index: 2;
 }
 
 .hk-card__h-thin {
-  font-size: 72px;
+  font-size: 58px;
   font-weight: 200;
   letter-spacing: -2px;
   line-height: 0.95;
@@ -215,53 +215,58 @@
 }
 
 .hk-card__h-heavy {
-  font-size: 72px;
+  font-size: 58px;
   font-weight: 900;
-  letter-spacing: -3px;
+  letter-spacing: -2.5px;
   line-height: 0.95;
   color: #fff;
   margin-top: -2px;
 }
 
 .hk-card__h-sub {
-  margin-top: 8px;
-  font-size: 22px;
-  font-weight: 400;
+  margin-top: 10px;
+  font-size: 20px;
+  font-weight: 500;
   color: #c6a8ff;
+  line-height: 1.25;
 }
 
-/* Side-by-side portraits + meta + QR — no empty side column */
+/*
+  Headline ends ~278 + 55 + 55 + 10 + 25 ≈ 423 (incl. descenders).
+  Frame glow extends ~8px above the border box — start body at 510
+  so ~80px clear air under "Vote for my project."
+*/
 .hk-card__body {
   position: absolute;
   left: 64px;
-  top: 508px;
+  top: 510px;
   width: 952px;
-  height: 592px;
+  height: 530px;
   z-index: 3;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .hk-card__portraits {
   display: flex;
   align-items: stretch;
   justify-content: center;
-  gap: 32px;
+  gap: 28px;
   flex: none;
 }
 
 .hk-card__frame {
   position: relative;
   flex: none;
-  width: 360px;
-  height: 400px; /* ~9:10 portrait */
-  border-radius: 36px;
+  width: 320px;
+  height: 360px; /* ~8:9 portrait — leaves room under vote line + above footer */
+  border-radius: 32px;
   background: linear-gradient(#3a1d7a 0%, #5b28d6 100%);
   box-shadow:
-    0 0 0 5px #ffffff22,
-    0 0 0 12px #6a2ff055,
-    0 24px 60px #6a2ff066,
+    0 0 0 4px #ffffff22,
+    0 0 0 8px #6a2ff044,
+    0 18px 48px #6a2ff066,
     inset 0 0 0 1.5px #ffffff33;
   overflow: hidden;
 }
@@ -272,13 +277,13 @@
 
 .hk-card__frame-tag {
   position: absolute;
-  top: 16px;
-  left: 16px;
+  top: 14px;
+  left: 14px;
   z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
+  height: 28px;
   padding: 0 12px;
   border-radius: 999px;
   background: #120726e6;
@@ -305,7 +310,7 @@
 .hk-card__frame-ph {
   position: absolute;
   inset: 12px;
-  border-radius: 26px;
+  border-radius: 24px;
   border: 2px dashed #c6a8ff80;
   display: flex;
   flex-direction: column;
@@ -316,7 +321,7 @@
 
 .hk-card__frame-ph--project {
   justify-content: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .hk-card__sil {
@@ -327,13 +332,13 @@
 }
 
 .hk-card__proj-icon {
-  width: 96px;
-  height: 96px;
+  width: 88px;
+  height: 88px;
   display: block;
 }
 
 .hk-card__frame-ph-lbl {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.4px;
   color: #c6a8ff;
@@ -367,7 +372,7 @@
 }
 
 .hk-card__proj {
-  font-weight: 400;
+  font-weight: 500;
   color: #a98bf0;
   line-height: 1.3;
   max-height: 52px;
@@ -404,12 +409,57 @@
   white-space: nowrap;
 }
 
+/* Footer: Join pill left + QR/urls right — single row, clear bottom pad */
+.hk-card__footer {
+  position: absolute;
+  left: 64px;
+  right: 64px;
+  bottom: 48px;
+  top: auto;
+  width: auto;
+  height: 112px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.hk-card__cta {
+  color: #fff;
+  background: linear-gradient(90deg, #4b17c9, #7b3bff);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px 14px 28px;
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 16px 34px #5a1edc80;
+  flex: none;
+}
+
+.hk-card__cta-arr {
+  background: #fff;
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: none;
+}
+
+.hk-card__cta-arr svg {
+  width: 17px;
+  height: 17px;
+}
+
 .hk-card__info-qr {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
-  margin-top: auto;
+  gap: 14px;
   flex: none;
 }
 
@@ -443,7 +493,7 @@
 
 .hk-card__urls b {
   display: block;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.3px;
@@ -452,57 +502,7 @@
 .hk-card__urls span {
   display: block;
   margin-top: 4px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
-  color: #c6a8ff;
-}
-
-.hk-card__footer {
-  position: absolute;
-  left: 64px;
-  top: 1120px;
-  width: 952px;
-  height: 140px;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.hk-card__cta {
-  color: #fff;
-  background: linear-gradient(90deg, #4b17c9, #7b3bff);
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 16px 14px 28px;
-  font-size: 24px;
-  font-weight: 700;
-  white-space: nowrap;
-  box-shadow: 0 16px 34px #5a1edc80;
-}
-
-.hk-card__cta-arr {
-  background: #fff;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex: none;
-}
-
-.hk-card__cta-arr svg {
-  width: 18px;
-  height: 18px;
-}
-
-.hk-card__foot-note {
-  text-align: right;
-  font-size: 19px;
-  font-weight: 600;
   color: #c6a8ff;
 }

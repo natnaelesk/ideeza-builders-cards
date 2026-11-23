@@ -217,7 +217,15 @@ export function HackathonCard({ state, cardRef, className }: HackathonCardProps)
             <div className="hk-card__chip">{copy.voteChip}</div>
           </div>
         </div>
+      </div>
 
+      <div className="hk-card__footer">
+        <div className="hk-card__cta">
+          {copy.cta}
+          <span className="hk-card__cta-arr">
+            <ArrowIcon />
+          </span>
+        </div>
         <div className="hk-card__info-qr">
           <div className="hk-card__qr-wrap">
             {qrDataUrl ? (
@@ -231,16 +239,6 @@ export function HackathonCard({ state, cardRef, className }: HackathonCardProps)
             <span>{hackathonLayout.telegramHandle}</span>
           </div>
         </div>
-      </div>
-
-      <div className="hk-card__footer">
-        <div className="hk-card__cta">
-          {copy.cta}
-          <span className="hk-card__cta-arr">
-            <ArrowIcon />
-          </span>
-        </div>
-        <div className="hk-card__foot-note">{copy.footNote}</div>
       </div>
     </div>
   )
