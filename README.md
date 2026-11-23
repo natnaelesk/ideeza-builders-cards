@@ -7,9 +7,11 @@ Pick a role (Builder / Mentor / Judge), upload a photo, enter your name + subtit
 
 Staff and custom roles use an unlisted **`/team`** route (e.g. `/team?role=Organizer`) — type your own role label; the pill and headline update live. The main page does not link to it.
 
+**Virtual Hackathon** cards live at **`/hackathon`** — Option 2 dark-violet design, portrait photo slot, public-vote chip, QR to `www.ideeza.com`. Same form → live preview → Download PNG / LinkedIn / X UX.
+
 Everything runs client-side. Nothing is uploaded or stored.
 
-Vercel serves SPA routes via `vercel.json` rewrites so `/team` works on direct load and refresh.
+Vercel serves SPA routes via `vercel.json` rewrites so `/team` and `/hackathon` work on direct load and refresh.
 
 ## Quick start
 

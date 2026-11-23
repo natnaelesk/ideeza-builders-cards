@@ -19,6 +19,11 @@ import './ShareSheet.css'
 export interface ShareSheetProps {
   platform: SocialPlatform
   fields: ShareFields
+  /**
+   * Optional override for post body (e.g. Virtual Hackathon).
+   * When set, `fields` are ignored for post text generation.
+   */
+  postText?: string
   /** Exported 1080×1350 PNG as a data URL */
   imageDataUrl: string
   filename: string
@@ -28,6 +33,7 @@ export interface ShareSheetProps {
 export function ShareSheet({
   platform,
   fields,
+  postText: postTextOverride,
   imageDataUrl,
   filename,
   onClose,
@@ -41,7 +47,7 @@ export function ShareSheet({
   const [hint, setHint] = useState<string | null>(null)
   const [nativeShare, setNativeShare] = useState(false)
 
-  const postText = buildPostText(platform, fields)
+  const postText = postTextOverride ?? buildPostText(platform, fields)
   const linksBlock = formatIdeezaLinksBlock()
   const copy = modalCopy
   const title = copy.titles[platform]
