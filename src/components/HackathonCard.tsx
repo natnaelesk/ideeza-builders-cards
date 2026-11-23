@@ -11,6 +11,8 @@ export interface HackathonCardState {
   project: string
   photoUrl: string | null
   photoTransform: PhotoTransform
+  projectImageUrl: string | null
+  projectImageTransform: PhotoTransform
 }
 
 export interface HackathonCardProps {
@@ -38,6 +40,46 @@ function HackathonPhotoSilhouette() {
   )
 }
 
+function ProjectPlaceholderIcon() {
+  return (
+    <svg className="hk-card__proj-icon" viewBox="0 0 120 120" aria-hidden>
+      <defs>
+        <linearGradient id="hk-proj" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#e2d4ff" />
+          <stop offset="1" stopColor="#9c7ae8" />
+        </linearGradient>
+      </defs>
+      <rect
+        x="18"
+        y="28"
+        width="84"
+        height="64"
+        rx="12"
+        fill="none"
+        stroke="url(#hk-proj)"
+        strokeWidth="4"
+        opacity=".9"
+      />
+      <circle cx="44" cy="52" r="10" fill="url(#hk-proj)" opacity=".85" />
+      <path
+        d="M26 80 L48 62 L62 72 L78 54 L102 80 Z"
+        fill="url(#hk-proj)"
+        opacity=".75"
+      />
+    </svg>
+  )
+}
+
+function coverStyle(t: PhotoTransform) {
+  const posX = 50 + t.x
+  const posY = 50 - t.y
+  return {
+    objectPosition: `${posX}% ${posY}%`,
+    transform: `scale(${t.zoom})`,
+    transformOrigin: `${posX}% ${posY}%`,
+  } as const
+}
+
 export function HackathonCard({ state, cardRef, className }: HackathonCardProps) {
   const { copy, logos, siteUrl } = hackathonLayout
   const [qrDataUrl, setQrDataUrl] = useState('')
@@ -47,13 +89,11 @@ export function HackathonCard({ state, cardRef, className }: HackathonCardProps)
   const name = nameEntered || copy.defaultName
   const project = projectEntered || copy.defaultProject
   const hasPhoto = Boolean(state.photoUrl)
-  const t = state.photoTransform
-  const posX = 50 + t.x
-  const posY = 50 - t.y
+  const hasProjectImage = Boolean(state.projectImageUrl)
 
   const nameRef = useRef<HTMLDivElement>(null)
   const projectRef = useRef<HTMLDivElement>(null)
-  const [nameSize, setNameSize] = useState(44)
+  const [nameSize, setNameSize] = useState(40)
   const [projectSize, setProjectSize] = useState(20)
 
   useEffect(() => {
@@ -72,11 +112,10 @@ export function HackathonCard({ state, cardRef, className }: HackathonCardProps)
   }, [siteUrl])
 
   useLayoutEffect(() => {
-    setNameSize(fitFontSize(nameRef.current, 44, 18))
+    setNameSize(fitFontSize(nameRef.current, 40, 18))
   }, [name])
 
   useLayoutEffect(() => {
-    // Project can wrap; shrink when a single long word overflows width.
     setProjectSize(fitFontSize(projectRef.current, 20, 13))
   }, [project])
 
@@ -122,31 +161,44 @@ export function HackathonCard({ state, cardRef, className }: HackathonCardProps)
       </div>
 
       <div className="hk-card__body">
-        <div className={`hk-card__photo${hasPhoto ? ' has-photo' : ''}`}>
-          {hasPhoto ? (
-            <img
-              className="hk-card__photo-img"
-              src={state.photoUrl!}
-              alt=""
-              draggable={false}
-              style={{
-                objectPosition: `${posX}% ${posY}%`,
-                transform: `scale(${t.zoom})`,
-                transformOrigin: `${posX}% ${posY}%`,
-              }}
-            />
-          ) : (
-            <div className="hk-card__photo-ph">
-              <div className="hk-card__photo-lbl">
-                PHOTO
-                <small>Upload your photo</small>
+        <div className="hk-card__portraits">
+          <div className={`hk-card__frame${hasPhoto ? ' has-media' : ''}`}>
+            <span className="hk-card__frame-tag">ME</span>
+            {hasPhoto ? (
+              <img
+                className="hk-card__frame-img"
+                src={state.photoUrl!}
+                alt=""
+                draggable={false}
+                style={coverStyle(state.photoTransform)}
+              />
+            ) : (
+              <div className="hk-card__frame-ph">
+                <HackathonPhotoSilhouette />
               </div>
-              <HackathonPhotoSilhouette />
-            </div>
-          )}
+            )}
+          </div>
+
+          <div className={`hk-card__frame${hasProjectImage ? ' has-media' : ''}`}>
+            <span className="hk-card__frame-tag">MY PROJECT</span>
+            {hasProjectImage ? (
+              <img
+                className="hk-card__frame-img"
+                src={state.projectImageUrl!}
+                alt=""
+                draggable={false}
+                style={coverStyle(state.projectImageTransform)}
+              />
+            ) : (
+              <div className="hk-card__frame-ph hk-card__frame-ph--project">
+                <ProjectPlaceholderIcon />
+                <div className="hk-card__frame-ph-lbl">Your project</div>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="hk-card__info">
+        <div className="hk-card__meta">
           <div
             ref={nameRef}
             className={`hk-card__name${nameEntered ? '' : ' is-placeholder'}`}
@@ -161,22 +213,22 @@ export function HackathonCard({ state, cardRef, className }: HackathonCardProps)
           >
             {project}
           </div>
-          <div className="hk-card__rule" />
           <div className="hk-card__chips">
             <div className="hk-card__chip">{copy.voteChip}</div>
           </div>
-          <div className="hk-card__info-qr">
-            <div className="hk-card__qr-wrap">
-              {qrDataUrl ? (
-                <img src={qrDataUrl} alt="" width={112} height={112} draggable={false} />
-              ) : (
-                <div className="hk-card__qr-ph" />
-              )}
-            </div>
-            <div className="hk-card__urls">
-              <b>www.ideeza.com</b>
-              <span>{hackathonLayout.telegramHandle}</span>
-            </div>
+        </div>
+
+        <div className="hk-card__info-qr">
+          <div className="hk-card__qr-wrap">
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="" width={104} height={104} draggable={false} />
+            ) : (
+              <div className="hk-card__qr-ph" />
+            )}
+          </div>
+          <div className="hk-card__urls">
+            <b>www.ideeza.com</b>
+            <span>{hackathonLayout.telegramHandle}</span>
           </div>
         </div>
       </div>

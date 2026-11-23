@@ -59,6 +59,66 @@ function setOrCreateMeta(
   return el
 }
 
+function CropControls({
+  legend,
+  transform,
+  onChange,
+  onReset,
+}: {
+  legend: string
+  transform: PhotoTransform
+  onChange: (next: PhotoTransform) => void
+  onReset: () => void
+}) {
+  return (
+    <fieldset className="field field--adjust">
+      <legend>{legend}</legend>
+      <label>
+        Zoom
+        <input
+          type="range"
+          min={PHOTO_ZOOM_MIN}
+          max={PHOTO_ZOOM_MAX}
+          step={0.01}
+          value={transform.zoom}
+          onChange={(e) =>
+            onChange({ ...transform, zoom: Number(e.target.value) })
+          }
+        />
+      </label>
+      <label>
+        Move left / right
+        <input
+          type="range"
+          min={PHOTO_PAN_MIN}
+          max={PHOTO_PAN_MAX}
+          step={1}
+          value={transform.x}
+          onChange={(e) =>
+            onChange({ ...transform, x: Number(e.target.value) })
+          }
+        />
+      </label>
+      <label>
+        Move up / down
+        <input
+          type="range"
+          min={PHOTO_PAN_MIN}
+          max={PHOTO_PAN_MAX}
+          step={1}
+          value={transform.y}
+          onChange={(e) =>
+            onChange({ ...transform, y: Number(e.target.value) })
+          }
+        />
+      </label>
+      <button type="button" className="btn btn--ghost" onClick={onReset}>
+        Reset crop
+      </button>
+    </fieldset>
+  )
+}
+
 /** Virtual Hackathon share-card studio — mirrors Builders' Lab UX. */
 export function HackathonStudio() {
   const [name, setName] = useState('')
@@ -67,6 +127,9 @@ export function HackathonStudio() {
   const [photoTransform, setPhotoTransform] = useState<PhotoTransform>(
     defaultPhotoTransform,
   )
+  const [projectImageUrl, setProjectImageUrl] = useState<string | null>(null)
+  const [projectImageTransform, setProjectImageTransform] =
+    useState<PhotoTransform>(defaultPhotoTransform)
   const [fontsReady, setFontsReady] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
@@ -78,6 +141,7 @@ export function HackathonStudio() {
   const cardRef = useRef<HTMLDivElement>(null)
   const previewViewportRef = useRef<HTMLDivElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
+  const projectImageInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     waitForFonts().then(() => setFontsReady(true))
@@ -144,6 +208,16 @@ export function HackathonStudio() {
     const dataUrl = await readFileAsDataUrl(file)
     setPhotoUrl(dataUrl)
     setPhotoTransform(defaultPhotoTransform())
+  }
+
+  const onProjectImageChange = async (file: File | null) => {
+    if (!file) {
+      setProjectImageUrl(null)
+      return
+    }
+    const dataUrl = await readFileAsDataUrl(file)
+    setProjectImageUrl(dataUrl)
+    setProjectImageTransform(defaultPhotoTransform())
   }
 
   const filename = `ideeza-hackathon-${(name || 'card')
@@ -289,64 +363,33 @@ export function HackathonStudio() {
           </label>
 
           {photoUrl && (
-            <fieldset className="field field--adjust">
-              <legend>Adjust photo</legend>
-              <label>
-                Zoom
-                <input
-                  type="range"
-                  min={PHOTO_ZOOM_MIN}
-                  max={PHOTO_ZOOM_MAX}
-                  step={0.01}
-                  value={photoTransform.zoom}
-                  onChange={(e) =>
-                    setPhotoTransform((t) => ({
-                      ...t,
-                      zoom: Number(e.target.value),
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Move left / right
-                <input
-                  type="range"
-                  min={PHOTO_PAN_MIN}
-                  max={PHOTO_PAN_MAX}
-                  step={1}
-                  value={photoTransform.x}
-                  onChange={(e) =>
-                    setPhotoTransform((t) => ({
-                      ...t,
-                      x: Number(e.target.value),
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Move up / down
-                <input
-                  type="range"
-                  min={PHOTO_PAN_MIN}
-                  max={PHOTO_PAN_MAX}
-                  step={1}
-                  value={photoTransform.y}
-                  onChange={(e) =>
-                    setPhotoTransform((t) => ({
-                      ...t,
-                      y: Number(e.target.value),
-                    }))
-                  }
-                />
-              </label>
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => setPhotoTransform(defaultPhotoTransform())}
-              >
-                Reset crop
-              </button>
-            </fieldset>
+            <CropControls
+              legend="Adjust photo"
+              transform={photoTransform}
+              onChange={setPhotoTransform}
+              onReset={() => setPhotoTransform(defaultPhotoTransform())}
+            />
+          )}
+
+          <label className="field">
+            <span>Project image</span>
+            <input
+              ref={projectImageInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                void onProjectImageChange(e.target.files?.[0] ?? null)
+              }}
+            />
+          </label>
+
+          {projectImageUrl && (
+            <CropControls
+              legend="Adjust project image"
+              transform={projectImageTransform}
+              onChange={setProjectImageTransform}
+              onReset={() => setProjectImageTransform(defaultPhotoTransform())}
+            />
           )}
 
           <div className="app__actions">
@@ -413,7 +456,14 @@ export function HackathonStudio() {
               }}
             >
               <HackathonCard
-                state={{ name, project, photoUrl, photoTransform }}
+                state={{
+                  name,
+                  project,
+                  photoUrl,
+                  photoTransform,
+                  projectImageUrl,
+                  projectImageTransform,
+                }}
                 cardRef={cardRef}
               />
             </div>

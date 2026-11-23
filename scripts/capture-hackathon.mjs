@@ -1,5 +1,5 @@
 /**
- * Captures /hackathon UI + a real 1080×1350 PNG export.
+ * Captures /hackathon UI + a real 1080×1350 PNG export (photo + project image).
  * Expects preview server at http://localhost:4173
  */
 import { chromium } from 'playwright'
@@ -16,6 +16,26 @@ function pngSize(buf) {
   return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) }
 }
 
+async function fillHackathonForm(page, { withProjectImage = true } = {}) {
+  await page.locator('.app__form input').nth(0).fill('Hana Tadesse')
+  await page
+    .locator('.app__form input')
+    .nth(1)
+    .fill('SoilSense — moisture intel for small farms')
+
+  const fileInputs = page.locator('input[type="file"]')
+  await fileInputs.nth(0).setInputFiles([])
+  await fileInputs.nth(0).setInputFiles(path.join(FIXTURES, 'sample-photo.png'))
+  if (withProjectImage) {
+    await fileInputs.nth(1).setInputFiles([])
+    await fileInputs
+      .nth(1)
+      .setInputFiles(path.join(FIXTURES, 'sample-badge.png'))
+  }
+  await page.waitForTimeout(800)
+  await page.evaluate(() => document.fonts.ready)
+}
+
 const browser = await chromium.launch()
 
 {
@@ -29,16 +49,7 @@ const browser = await chromium.launch()
   await page.waitForSelector('.hk-card')
   await page.evaluate(() => document.fonts.ready)
 
-  await page.locator('.app__form input').nth(0).fill('Hana Tadesse')
-  await page
-    .locator('.app__form input')
-    .nth(1)
-    .fill('SoilSense — moisture intel for small farms')
-
-  const photoInput = page.locator('input[type="file"]').first()
-  await photoInput.setInputFiles(path.join(FIXTURES, 'sample-photo.png'))
-  await page.waitForTimeout(800)
-  await page.evaluate(() => document.fonts.ready)
+  await fillHackathonForm(page)
 
   await page.screenshot({
     path: path.join(OUT, 'hackathon-generator-page.png'),
@@ -49,28 +60,6 @@ const browser = await chromium.launch()
     path: path.join(OUT, 'hackathon-preview.png'),
     type: 'png',
   })
-
-  // Placeholder (no photo) export reference — reload clean then fill name only
-  await page.goto(`${BASE}/hackathon`, { waitUntil: 'networkidle' })
-  await page.waitForSelector('.hk-card')
-  await page.locator('.app__form input').nth(0).fill('Your Name')
-  await page.waitForTimeout(400)
-  await page.locator('.hk-card').screenshot({
-    path: path.join(OUT, 'hackathon-card-placeholder-preview.png'),
-    type: 'png',
-  })
-
-  // Filled card again for export
-  await page.goto(`${BASE}/hackathon`, { waitUntil: 'networkidle' })
-  await page.waitForSelector('.hk-card')
-  await page.locator('.app__form input').nth(0).fill('Hana Tadesse')
-  await page
-    .locator('.app__form input')
-    .nth(1)
-    .fill('SoilSense — moisture intel for small farms')
-  await photoInput.setInputFiles(path.join(FIXTURES, 'sample-photo.png'))
-  await page.waitForTimeout(800)
-  await page.evaluate(() => document.fonts.ready)
 
   const downloadBtn = page.getByRole('button', { name: 'Download PNG' })
   await page.waitForFunction(() => {
@@ -93,8 +82,8 @@ const browser = await chromium.launch()
     console.error('BAD SIZE for hackathon export')
     process.exitCode = 1
   }
+  fs.copyFileSync(outPath, path.join(OUT, 'hackathon-card-side-by-side.png'))
 
-  // Mobile UI
   await ctx.close()
 }
 
@@ -106,16 +95,7 @@ const browser = await chromium.launch()
   const page = await ctx.newPage()
   await page.goto(`${BASE}/hackathon`, { waitUntil: 'networkidle' })
   await page.waitForSelector('.hk-card')
-  await page.locator('.app__form input').nth(0).fill('Hana Tadesse')
-  await page
-    .locator('.app__form input')
-    .nth(1)
-    .fill('SoilSense — moisture intel')
-  await page
-    .locator('input[type="file"]')
-    .first()
-    .setInputFiles(path.join(FIXTURES, 'sample-photo.png'))
-  await page.waitForTimeout(600)
+  await fillHackathonForm(page)
   await page.screenshot({
     path: path.join(OUT, 'hackathon-mobile-ui.png'),
     fullPage: true,
