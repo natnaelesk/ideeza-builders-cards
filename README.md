@@ -7,7 +7,7 @@ Pick a role (Builder / Mentor / Judge), upload a photo, enter your name + subtit
 
 Staff and custom roles use an unlisted **`/team`** route (e.g. `/team?role=Organizer`) — type your own role label; the pill and headline update live. The main page does not link to it.
 
-**Virtual Hackathon** cards live at **`/hackathon`** — Option 2 dark-violet design, portrait photo slot, public-vote chip, QR to `www.ideeza.com`. Same form → live preview → Download PNG / LinkedIn / X UX.
+**Virtual Hackathon** cards live at **`/hackathon`** — "Option 5 holo ticket" design (violet ballot ticket, ME + MY PROJECT uploads, vote stub with QR to `www.ideeza.com`), full-glyph Poppins + Anton self-hosted as woff2. Same form → live preview → Download PNG / LinkedIn / X UX.
 
 Everything runs client-side. Nothing is uploaded or stored.
 

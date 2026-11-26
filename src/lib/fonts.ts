@@ -15,9 +15,13 @@ const POPPINS_FACES: ReadonlyArray<{ weight: number; path: string }> = [
   { weight: 900, path: '/fonts/Poppins-Black.woff2' },
 ]
 
-const POPPINS_LOADS = POPPINS_FACES.map(
-  (f) => `${f.weight} 48px Poppins`,
-) as readonly string[]
+/** Anton is used for the display type on the Virtual Hackathon holo card. */
+const ANTON_PATH = '/fonts/Anton-Regular.woff2'
+
+const POPPINS_LOADS = [
+  ...POPPINS_FACES.map((f) => `${f.weight} 48px Poppins`),
+  '400 48px Anton',
+] as readonly string[]
 
 let cachedEmbedCss: string | null = null
 let embedCssPromise: Promise<string> | null = null
@@ -49,9 +53,19 @@ export async function getPoppinsEmbedCss(): Promise<string> {
           `@font-face{font-family:'Poppins';src:url(data:font/woff2;base64,${b64}) format('woff2');font-weight:${face.weight};font-style:normal;font-display:block;}`,
         )
       }
-      // Force every node in the card (and builders cards) to use Poppins.
+      const antonRes = await fetch(ANTON_PATH)
+      if (!antonRes.ok) {
+        throw new Error(`Failed to load font ${ANTON_PATH}: ${antonRes.status}`)
+      }
+      const antonB64 = bufferToBase64(await antonRes.arrayBuffer())
+      parts.push(
+        `@font-face{font-family:'Anton';src:url(data:font/woff2;base64,${antonB64}) format('woff2');font-weight:400;font-style:normal;font-display:block;}`,
+      )
+      // Force every node in the card (and builders cards) to use Poppins,
+      // except the hackathon card's Anton display type.
       parts.push(
         `.hk-card,.hk-card *,.share-card,.share-card *{font-family:Poppins,sans-serif!important;}`,
+        `.hk-card .hk-anton,.hk-card .hk-anton *{font-family:Anton,Poppins,sans-serif!important;}`,
       )
       cachedEmbedCss = parts.join('')
       return cachedEmbedCss
@@ -71,6 +85,10 @@ export async function waitForFonts(): Promise<void> {
     await Promise.all([
       ...POPPINS_LOADS.map((spec) => document.fonts.load(spec)),
       // Also warm common text sizes used on the hackathon card.
+      document.fonts.load('400 100px Anton'),
+      document.fonts.load('200 150px Poppins'),
+      document.fonts.load('600 32px Poppins'),
+      document.fonts.load('700 18px Poppins'),
       document.fonts.load('300 17px Poppins'),
       document.fonts.load('400 17px Poppins'),
       document.fonts.load('400 20px Poppins'),
