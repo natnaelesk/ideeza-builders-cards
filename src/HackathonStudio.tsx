@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LinkedInIcon, XIcon } from './components/BrandIcons'
 import { HackathonCard } from './components/HackathonCard'
+import { SaveImageOverlay } from './components/SaveImageOverlay'
 import { ShareSheet } from './components/ShareSheet'
 import { Toast } from './components/Toast'
 import { hackathonLayout } from './config/hackathonLayout'
 import { buildHackathonPostText } from './config/hackathonShareText'
 import { modalCopy } from './config/shareText'
 import {
-  canShareFiles,
-  dataUrlToFile,
-  downloadDataUrl,
-  renderCardPng,
-  shareCardFile,
-} from './lib/exportCard'
+  dataUrlToPngFile,
+  deliverPngFileSync,
+  deliverPngFileWhenReady,
+  type DeliverResult,
+} from './lib/deliverExport'
+import { canShareFiles, renderCardPng } from './lib/exportCard'
 import { waitForFonts } from './lib/fonts'
 import type { SocialPlatform } from './lib/socialShare'
 import {
@@ -137,6 +138,14 @@ export function HackathonStudio() {
   const [shareSheet, setShareSheet] = useState<ShareSheetState | null>(null)
   const [previewScale, setPreviewScale] = useState(1)
   const [shareSupported] = useState(() => canShareFiles())
+  const [saveOverlay, setSaveOverlay] = useState<{
+    url: string
+    filename: string
+  } | null>(null)
+  /** Pre-rendered PNG File for the current inputs (null while stale). */
+  const exportFileRef = useRef<File | null>(null)
+  /** Serialises html-to-image renders (prewarm + click fallbacks). */
+  const renderChainRef = useRef<Promise<unknown>>(Promise.resolve())
 
   const cardRef = useRef<HTMLDivElement>(null)
   const previewViewportRef = useRef<HTMLDivElement>(null)
@@ -226,11 +235,10 @@ export function HackathonStudio() {
     .replace(/^-|-$/g, '')
     .slice(0, 40)}.png`
 
-  const runExport = useCallback(async () => {
-    if (!cardRef.current) return null
-    setExporting(true)
-    setStatus('Rendering card…')
-    try {
+  /** Render the live card to a PNG data URL (queued behind any in-flight render). */
+  const renderNow = useCallback((): Promise<string | null> => {
+    const run = async () => {
+      if (!cardRef.current) return null
       await waitForFonts()
       const images = Array.from(cardRef.current.querySelectorAll('img'))
       await Promise.all(
@@ -243,47 +251,121 @@ export function HackathonStudio() {
         }),
       )
       return await renderCardPng(cardRef.current)
+    }
+    const next = renderChainRef.current.then(run, run)
+    renderChainRef.current = next.catch(() => null)
+    return next
+  }, [])
+
+  const runExport = useCallback(async () => {
+    setExporting(true)
+    setStatus('Rendering card…')
+    try {
+      return await renderNow()
     } finally {
       setExporting(false)
     }
-  }, [])
+  }, [renderNow])
 
-  const onDownload = async () => {
-    try {
-      const dataUrl = await runExport()
-      if (!dataUrl) return
-      downloadDataUrl(dataUrl, filename)
-      setStatus('Downloaded PNG (1080×1350).')
-    } catch (err) {
-      console.error(err)
-      setStatus('Export failed. Try again or use another browser.')
+  const buildFile = useCallback(async (): Promise<File> => {
+    const dataUrl = await renderNow()
+    if (!dataUrl) throw new Error('Card not ready')
+    return dataUrlToPngFile(dataUrl, filename)
+  }, [renderNow, filename])
+
+  // Pre-render the PNG ~250ms after any change so Download/Share can hand the
+  // File to navigator.share synchronously inside the click (iOS requirement).
+  useEffect(() => {
+    exportFileRef.current = null
+    if (!fontsReady) return
+    let cancelled = false
+    const id = window.setTimeout(() => {
+      buildFile()
+        .then((file) => {
+          if (!cancelled) exportFileRef.current = file
+        })
+        .catch((err) => console.warn('PNG prewarm failed', err))
+    }, 250)
+    return () => {
+      cancelled = true
+      window.clearTimeout(id)
+    }
+  }, [
+    fontsReady,
+    buildFile,
+    name,
+    project,
+    photoUrl,
+    photoTransform,
+    projectImageUrl,
+    projectImageTransform,
+  ])
+
+  const openSaveOverlay = (url: string) => {
+    setSaveOverlay((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url)
+      return { url, filename }
+    })
+  }
+
+  const onShareError = (err: unknown) => {
+    console.error(err)
+    setToast('Sharing failed — long-press the image to save it instead.')
+  }
+
+  const reportResult = (result: DeliverResult) => {
+    if (result === 'shared') setStatus('Card ready — choose Save Image or an app.')
+    else if (result === 'downloaded') setStatus('Downloaded PNG (1080×1350).')
+    else if (result === 'overlay' || result === 'popup')
+      setStatus('Long-press the image and tap Save Image (or Add to Photos).')
+    else if (result === 'cancelled') setStatus(null)
+    else if (result === 'error') {
+      setStatus(null)
+      setToast('Export failed. Try again or use another browser.')
     }
   }
 
-  const onShare = async () => {
-    try {
-      const dataUrl = await runExport()
-      if (!dataUrl) return
-      const file = await dataUrlToFile(dataUrl, filename)
-      const shared = await shareCardFile(
-        file,
-        'My IDEEZA Virtual Hackathon card',
+  /**
+   * Deliver the card PNG. With a pre-rendered File this is fully synchronous
+   * (navigator.share is called in the click turn); otherwise renders first.
+   */
+  const deliver = (preferShare?: boolean) => {
+    const title = 'My IDEEZA Virtual Hackathon card'
+    const cached = exportFileRef.current
+    if (cached) {
+      reportResult(
+        deliverPngFileSync({
+          file: cached,
+          title,
+          text: title,
+          preferShare,
+          onOverlay: openSaveOverlay,
+          onShareError,
+        }),
       )
-      if (shared) {
-        setStatus('Shared!')
-      } else {
-        downloadDataUrl(dataUrl, filename)
-        setStatus('Share not available — downloaded instead.')
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        setStatus(null)
-        return
-      }
-      console.error(err)
-      setStatus('Share failed. Try downloading instead.')
+      return
     }
+    setExporting(true)
+    setStatus('Rendering card…')
+    void deliverPngFileWhenReady({
+      getFile: buildFile,
+      title,
+      text: title,
+      preferShare,
+      onOverlay: openSaveOverlay,
+    })
+      .then(reportResult)
+      .catch((err) => {
+        console.error(err)
+        reportResult('error')
+      })
+      .finally(() => setExporting(false))
   }
+
+  // Touch/iOS → share sheet (Save Image); desktop → <a download>.
+  const onDownload = () => deliver()
+
+  const onShare = () => deliver(true)
 
   const onSocialShare = async (platform: SocialPlatform) => {
     try {
@@ -326,7 +408,7 @@ export function HackathonStudio() {
           className="app__form"
           onSubmit={(e) => {
             e.preventDefault()
-            void onDownload()
+            onDownload()
           }}
         >
           <label className="field">
@@ -423,7 +505,7 @@ export function HackathonStudio() {
                 type="button"
                 className="btn btn--secondary"
                 disabled={exporting || !fontsReady}
-                onClick={() => void onShare()}
+                onClick={onShare}
               >
                 Share
               </button>
@@ -482,6 +564,17 @@ export function HackathonStudio() {
       </footer>
 
       <Toast message={toast} onDismiss={() => setToast(null)} />
+
+      {saveOverlay && (
+        <SaveImageOverlay
+          imageUrl={saveOverlay.url}
+          filename={saveOverlay.filename}
+          onClose={() => {
+            URL.revokeObjectURL(saveOverlay.url)
+            setSaveOverlay(null)
+          }}
+        />
+      )}
 
       {shareSheet && (
         <ShareSheet

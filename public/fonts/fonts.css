@@ -1,4 +1,4 @@
-/* Self-hosted Poppins — same-origin so html-to-image can embed fonts in PNG exports. */
+/* Self-hosted full-glyph Poppins + Anton (woff2) — same-origin so html-to-image can embed fonts in PNG exports. */
 @font-face {
   font-family: 'Poppins';
   src: url('/fonts/Poppins-ExtraLight.woff2') format('woff2');
@@ -59,6 +59,14 @@
   font-family: 'Poppins';
   src: url('/fonts/Poppins-Black.woff2') format('woff2');
   font-weight: 900;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Anton';
+  src: url('/fonts/Anton-Regular.woff2') format('woff2');
+  font-weight: 400;
   font-style: normal;
   font-display: block;
 }
